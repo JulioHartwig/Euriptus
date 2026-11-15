@@ -1,0 +1,64 @@
+// Schema inicial do Euriptus.
+//
+// Escopo desta iteração: usuários, empresas e a relação entre eles.
+// Modelos de rodadas, propostas, transações, eventos, empréstimos e catálogo
+// entram em iterações futuras. As escolhas abaixo (ids cuid, enums, Decimal
+// com precisão fixa e timestamps) permitem adicioná-los sem quebrar contratos.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+}
+
+enum EmpresaTipo {
+  PRODUTOR
+  LOGISTICA
+  BENEFICIAMENTO
+  VENDA
+}
+
+model User {
+  id           String @id @default(cuid())
+  nome         String
+  email        String @unique
+  passwordHash String
+  role         Role   @default(STUDENT)
+
+  // Obrigatório para STUDENT na camada de aplicação (ver README).
+  // TEACHER não pertence a empresa. Fica opcional no schema para permitir
+  // usuários de teste e futuras contas de suporte.
+  empresaId String?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([empresaId])
+  @@index([role])
+}
+
+model Empresa {
+  id   String      @id @default(cuid())
+  nome String      @unique
+  tipo EmpresaTipo
+
+  // Valores monetários sempre em Decimal no banco; a UI formata em pt-BR.
+  saldo Decimal @default(0) @db.Decimal(14, 2)
+
+  usuarios User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tipo])
+}

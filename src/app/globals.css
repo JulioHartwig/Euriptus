@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 38 38% 97%;
+    --foreground: 24 22% 13%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 24 22% 13%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 22% 13%;
+
+    --primary: 158 42% 22%;
+    --primary-foreground: 40 40% 97%;
+
+    --secondary: 36 30% 92%;
+    --secondary-foreground: 24 22% 20%;
+
+    --muted: 36 24% 93%;
+    --muted-foreground: 25 9% 42%;
+
+    --accent: 33 78% 91%;
+    --accent-foreground: 25 45% 24%;
+
+    --destructive: 0 68% 44%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 33 20% 87%;
+    --input: 33 20% 84%;
+    --ring: 158 42% 30%;
+
+    --radius: 0.75rem;
+
+    --sidebar: 158 32% 13%;
+    --sidebar-foreground: 40 32% 92%;
+    --sidebar-muted: 40 14% 66%;
+    --sidebar-accent: 158 26% 20%;
+    --sidebar-border: 158 20% 25%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: hsl(33 78% 82%);
+    color: hsl(24 45% 16%);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .surface-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.35) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.35) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
