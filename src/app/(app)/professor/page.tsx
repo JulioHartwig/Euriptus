@@ -1,10 +1,25 @@
-import type { Metadata } from "next";
-import { Building2, Eye, GraduationCap, Users, Wallet } from "lucide-react";
+﻿import type { Metadata } from "next";
+import Link from "next/link";
+import {
+  BadgeDollarSign,
+  Building2,
+  CalendarClock,
+  GraduationCap,
+  Landmark,
+  Megaphone,
+  Newspaper,
+  Package,
+  Settings,
+  Users,
+  Wallet,
+} from "lucide-react";
 
 import { EmpresaIcon } from "@/components/empresa-icon";
+import { NoticiaLista } from "@/components/noticia-lista";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -20,6 +35,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { requireTeacher } from "@/server/auth/session";
 import { listEmpresasComEstudantes } from "@/server/repositories/empresa-repository";
+import { getTodasNoticias } from "@/server/services/noticia-service";
 
 export const metadata: Metadata = {
   title: "Painel do Professor",
@@ -28,7 +44,10 @@ export const metadata: Metadata = {
 export default async function ProfessorPage() {
   await requireTeacher();
 
-  const empresas = await listEmpresasComEstudantes();
+  const [empresas, noticias] = await Promise.all([
+    listEmpresasComEstudantes(),
+    getTodasNoticias(),
+  ]);
   const empresasOrdenadas = [...empresas].sort(
     (a, b) => EMPRESA_TIPOS.indexOf(a.tipo) - EMPRESA_TIPOS.indexOf(b.tipo),
   );
@@ -45,14 +64,30 @@ export default async function ProfessorPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Área do professor"
+        eyebrow="Ãrea do professor"
         title="Painel do Professor"
-        description="Visão geral das empresas da cadeia produtiva. Nesta iteração, os dados são somente leitura."
+        description="VisÃ£o geral e gestÃ£o do simulador: rodadas, empresas, usuÃ¡rios, parÃ¢metros, catÃ¡logo e notÃ­cias."
         actions={
-          <Badge variant="outline" className="gap-1.5 bg-card px-3 py-1.5">
-            <Eye aria-hidden="true" className="h-3.5 w-3.5 text-primary" />
-            Somente leitura
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href="/professor/rodadas">
+                <CalendarClock aria-hidden="true" className="h-4 w-4" />
+                Rodadas
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/professor/financeiro">
+                <Landmark aria-hidden="true" className="h-4 w-4" />
+                Financeiro
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/professor/banco">
+                <BadgeDollarSign aria-hidden="true" className="h-4 w-4" />
+                Banco
+              </Link>
+            </Button>
+          </div>
         }
       />
 
@@ -104,12 +139,27 @@ export default async function ProfessorPage() {
 
       <Alert variant="info">
         <GraduationCap aria-hidden="true" className="h-4 w-4" />
-        <AlertTitle>Configuração chega nas próximas iterações</AlertTitle>
+        <AlertTitle>Gestão disponível</AlertTitle>
         <AlertDescription>
-          Cadastro de empresas, disparo de eventos, abertura e fechamento de rodadas e
-          acompanhamento das negociações serão adicionados gradualmente.
+          Gerencie rodadas, eventos econômicos, empresas, usuários, notícias, parâmetros, catálogo e
+          acompanhe banco/financeiro consolidado. Próxima etapa: polimento, testes e deploy.
         </AlertDescription>
       </Alert>
+
+      <section aria-label="Atalhos de gestão" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { href: "/professor/eventos", label: "Eventos", desc: "Templates e disparos", icon: Megaphone },
+          { href: "/professor/empresas", label: "Empresas", desc: "Cadastro e detalhes", icon: Building2 },
+          { href: "/professor/usuarios", label: "Usuários", desc: "Contas e vínculos", icon: Users },
+          { href: "/professor/parametros", label: "Parâmetros", desc: "Taxas e regras", icon: Settings },
+          { href: "/professor/catalogo", label: "Catálogo", desc: "Itens e preços", icon: Package },
+        ].map((item) => (
+          <Link key={item.href} href={item.href} className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent/40">
+            <div className="flex items-center gap-2 font-medium"><item.icon className="h-4 w-4 text-primary" />{item.label}</div>
+            <p className="mt-1 text-xs text-muted-foreground">{item.desc}</p>
+          </Link>
+        ))}
+      </section>
 
       <section aria-labelledby="empresas-title">
         <div className="mb-4 flex items-end justify-between gap-4">
@@ -118,7 +168,7 @@ export default async function ProfessorPage() {
               Empresas da cadeia
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ordenadas pela posição na cadeia produtiva.
+              Ordenadas pela posiÃ§Ã£o na cadeia produtiva.
             </p>
           </div>
           <span className="text-xs text-muted-foreground">
@@ -153,7 +203,7 @@ export default async function ProfessorPage() {
                     {empresa.nome}
                   </CardTitle>
                   <CardDescription>
-                    {EMPRESA_TIPO_LABEL[empresa.tipo]} ·{" "}
+                    {EMPRESA_TIPO_LABEL[empresa.tipo]} Â·{" "}
                     {EMPRESA_TIPO_DESCRICAO[empresa.tipo]}
                   </CardDescription>
                 </CardHeader>
@@ -185,6 +235,29 @@ export default async function ProfessorPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section aria-labelledby="noticias-professor-title" className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2
+              id="noticias-professor-title"
+              className="font-display text-xl font-semibold tracking-tight"
+            >
+              NotÃ­cias do mercado
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              ConteÃºdo exibido no painel dos estudantes. Nesta iteraÃ§Ã£o, somente leitura.
+            </p>
+          </div>
+          <Button asChild variant="outline">
+            <Link href="/professor/noticias">
+              <Newspaper aria-hidden="true" className="h-4 w-4" />
+              Gerenciar notÃ­cias
+            </Link>
+          </Button>
+        </div>
+        <NoticiaLista noticias={noticias} mostrarInativas />
       </section>
     </div>
   );

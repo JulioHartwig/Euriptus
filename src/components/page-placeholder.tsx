@@ -15,11 +15,15 @@ export function PagePlaceholder({
   description,
   icon: Icon,
   upcoming,
+  backHref = "/painel",
+  backLabel = "Voltar ao painel",
 }: {
   title: string;
   description: string;
   icon: LucideIcon;
   upcoming: string[];
+  backHref?: string;
+  backLabel?: string;
 }) {
   return (
     <div className="space-y-6">
@@ -67,10 +71,10 @@ export function PagePlaceholder({
             ))}
           </ul>
           <Link
-            href="/painel"
+            href={backHref}
             className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
           >
-            Voltar ao painel
+            {backLabel}
             <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
           </Link>
         </CardContent>

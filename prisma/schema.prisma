@@ -27,6 +27,45 @@ enum EmpresaTipo {
   VENDA
 }
 
+enum NoticiaTipo {
+  MERCADO
+  EVENTO
+  AVISO
+}
+
+enum TransacaoTipo {
+  RECEITA
+  DESPESA
+  IMPOSTO
+  SALARIO
+  JUROS
+  EMPRESTIMO
+  INVESTIMENTO
+  RESGATE
+}
+
+enum StatusEmprestimo {
+  ATIVO
+  QUITADO
+}
+
+enum StatusInvestimento {
+  ATIVO
+  RESGATADO
+}
+
+enum PropostaStatus {
+  PENDENTE
+  ACEITA
+  RECUSADA
+  CANCELADA
+}
+
+enum RodadaStatus {
+  ABERTA
+  FECHADA
+}
+
 model User {
   id           String @id @default(cuid())
   nome         String
@@ -39,6 +78,17 @@ model User {
   // usuários de teste e futuras contas de suporte.
   empresaId String?
   empresa   Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+
+  transacoes Transacao[] @relation("TransacaoCriadaPor")
+
+  emprestimos            Emprestimo[]   @relation("EmprestimoCriadoPor")
+  investimentosCriados   Investimento[] @relation("InvestimentoCriadoPor")
+  investimentosResgatados Investimento[] @relation("InvestimentoResgatadoPor")
+  propostasCriadas       Proposta[]     @relation("PropostaCriadaPor")
+  propostasRespondidas   Proposta[]     @relation("PropostaRespondidaPor")
+  rodadasAbertas         Rodada[]       @relation("RodadaAbertaPor")
+  rodadasFechadas        Rodada[]       @relation("RodadaFechadaPor")
+  eventosDisparados      EventoAtivo[]  @relation("EventoDisparadoPor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -57,8 +107,254 @@ model Empresa {
 
   usuarios User[]
 
+  transacoes    Transacao[]
+  custosFixos   CustoFixo[]
+  emprestimos   Emprestimo[]
+  investimentos Investimento[]
+  estoque       EstoqueItem[]
+  propostasEnviadas  Proposta[] @relation("PropostaOrigem")
+  propostasRecebidas Proposta[] @relation("PropostaDestino")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([tipo])
+}
+
+/// Notícias são globais: valem para toda a cadeia, não por empresa.
+/// Podem ser gerenciadas pelo professor e também geradas automaticamente por eventos econômicos.
+model Noticia {
+  id      String      @id @default(cuid())
+  titulo  String
+  corpo   String
+  tipo    NoticiaTipo @default(MERCADO)
+  ativa   Boolean     @default(true)
+  criadoEm DateTime   @default(now())
+
+  eventos EventoAtivo[]
+
+  @@index([ativa, criadoEm])
+  @@index([tipo])
+}
+
+/// Lançamento financeiro de uma empresa.
+///
+/// `valor` é sempre positivo; quem define entrada ou saída é o `tipo`.
+/// `rodadaId` fica opcional e sem FK por enquanto: o modelo `Rodada` chega na
+/// Etapa 7, quando a relação será criada. `criadoPorUserId` atende ao requisito
+/// de auditoria (toda ação registra quem a executou).
+model Transacao {
+  id        String         @id @default(cuid())
+  empresaId String
+  empresa   Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipo      TransacaoTipo
+  descricao String
+  valor     Decimal        @db.Decimal(14, 2)
+
+  /// Preenchido quando a transação pertence a uma rodada.
+  rodadaId String?
+  rodada   Rodada? @relation(fields: [rodadaId], references: [id], onDelete: SetNull)
+
+  criadoEm         DateTime @default(now())
+  criadoPorUserId  String
+  criadoPor        User     @relation("TransacaoCriadaPor", fields: [criadoPorUserId], references: [id])
+
+  @@index([empresaId, criadoEm])
+  @@index([empresaId, tipo])
+  @@index([rodadaId])
+}
+
+/// Custos recorrentes da empresa. Ainda não são aplicados automaticamente:
+/// o processamento por rodada chega na Etapa 7.
+model CustoFixo {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  descricao String
+  valor     Decimal @db.Decimal(14, 2)
+  ativo     Boolean @default(true)
+
+  @@index([empresaId, ativo])
+}
+
+/// Parâmetros econômicos globais editáveis pelo professor (Etapa 8).
+/// Percentuais são armazenados como fração (ex.: 0,08 = 8%).
+model ParametroEconomico {
+  id        String  @id @default(cuid())
+  nome      String  @unique
+  valor     Decimal @db.Decimal(14, 4)
+  descricao String
+}
+
+/// Contrato de empréstimo contratado pela empresa.
+///
+/// `taxaJurosMensal` guarda a taxa vigente no momento da contratação: mudanças
+/// futuras em `ParametroEconomico` não alteram contratos já firmados.
+/// `totalDevido` = principal + juros de um mês (juros simples). A quitação
+/// automática será processada nas rodadas (Etapa 7).
+model Emprestimo {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  valorPrincipal  Decimal @db.Decimal(14, 2)
+  taxaJurosMensal Decimal @db.Decimal(14, 4)
+  totalDevido     Decimal @db.Decimal(14, 2)
+
+  status StatusEmprestimo @default(ATIVO)
+
+  criadoEm DateTime @default(now())
+
+  criadoPorUserId String
+  criadoPor       User   @relation("EmprestimoCriadoPor", fields: [criadoPorUserId], references: [id])
+
+  @@index([empresaId, status])
+  @@index([empresaId, criadoEm])
+}
+
+/// Aplicação financeira da empresa.
+///
+/// `taxaRendimentoMensal` também é um snapshot da taxa (JUROS_MENSAL ÷ 2 no
+/// momento da aplicação). O resgate, nesta etapa, paga principal + rendimento
+/// de um mês; o rendimento por rodada chega na Etapa 7.
+model Investimento {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  valorAplicado         Decimal @db.Decimal(14, 2)
+  taxaRendimentoMensal  Decimal @db.Decimal(14, 4)
+  valorResgate           Decimal? @db.Decimal(14, 2)
+
+  status StatusInvestimento @default(ATIVO)
+
+  criadoEm    DateTime  @default(now())
+  resgatadoEm DateTime?
+
+  criadoPorUserId String
+  criadoPor       User   @relation("InvestimentoCriadoPor", fields: [criadoPorUserId], references: [id])
+
+  resgatadoPorUserId String?
+  resgatadoPor       User?   @relation("InvestimentoResgatadoPor", fields: [resgatadoPorUserId], references: [id])
+
+  @@index([empresaId, status])
+  @@index([empresaId, criadoEm])
+}
+
+/// Item do catálogo de compras com preço fixo.
+/// `empresaTipo` nulo significa que o item está disponível para todas as empresas.
+model CatalogoItem {
+  id          String       @id @default(cuid())
+  nome        String
+  descricao   String
+  unidade     String
+  preco       Decimal      @db.Decimal(14, 2)
+  empresaTipo EmpresaTipo?
+  ativo       Boolean      @default(true)
+
+  estoque   EstoqueItem[]
+  propostas Proposta[]
+
+  @@index([ativo, empresaTipo])
+}
+
+/// Estoque da empresa por item de catálogo (quantidades agregadas).
+model EstoqueItem {
+  id             String       @id @default(cuid())
+  empresaId      String
+  empresa        Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  catalogoItemId String
+  catalogoItem   CatalogoItem @relation(fields: [catalogoItemId], references: [id], onDelete: Cascade)
+  quantidade     Int          @default(0)
+  atualizadoEm   DateTime     @updatedAt
+
+  @@unique([empresaId, catalogoItemId])
+  @@index([empresaId])
+}
+
+/// Proposta formal entre empresas (oferta → aceite).
+/// No aceite: vendedor transfere estoque e recebe valor; comprador paga e recebe estoque.
+model Proposta {
+  id               String         @id @default(cuid())
+  empresaOrigemId  String
+  empresaOrigem    Empresa        @relation("PropostaOrigem", fields: [empresaOrigemId], references: [id], onDelete: Cascade)
+  empresaDestinoId String
+  empresaDestino   Empresa        @relation("PropostaDestino", fields: [empresaDestinoId], references: [id], onDelete: Cascade)
+
+  catalogoItemId String
+  catalogoItem   CatalogoItem @relation(fields: [catalogoItemId], references: [id])
+  quantidade     Int
+  valorTotal     Decimal        @db.Decimal(14, 2)
+  mensagem       String?
+
+  status PropostaStatus @default(PENDENTE)
+
+  criadoEm        DateTime @default(now())
+  criadoPorUserId String
+  criadoPor       User     @relation("PropostaCriadaPor", fields: [criadoPorUserId], references: [id])
+
+  respondidoEm        DateTime?
+  respondidoPorUserId String?
+  respondidoPor       User?     @relation("PropostaRespondidaPor", fields: [respondidoPorUserId], references: [id])
+
+  @@index([empresaOrigemId, status])
+  @@index([empresaDestinoId, status])
+  @@index([criadoEm])
+}
+
+/// Rodada do jogo, aberta e fechada pelo professor.
+model Rodada {
+  id     String       @id @default(cuid())
+  numero Int          @unique
+  status RodadaStatus @default(ABERTA)
+
+  abertaEm DateTime @default(now())
+  abertaPorUserId String
+  abertaPor       User   @relation("RodadaAbertaPor", fields: [abertaPorUserId], references: [id])
+
+  fechadaEm       DateTime?
+  fechadaPorUserId String?
+  fechadaPor       User?    @relation("RodadaFechadaPor", fields: [fechadaPorUserId], references: [id])
+
+  transacoes Transacao[]
+  eventos     EventoAtivo[]
+
+  @@index([status])
+}
+
+/// Template pré-registrado de evento econômico, disparado pelo professor.
+model EventoTemplate {
+  id           String      @id @default(cuid())
+  titulo       String
+  descricao    String
+  tipoNoticia  NoticiaTipo @default(EVENTO)
+  impactoTexto String?
+  ativo        Boolean     @default(true)
+  criadoEm     DateTime    @default(now())
+  atualizadoEm DateTime    @updatedAt
+
+  disparos EventoAtivo[]
+
+  @@index([ativo])
+}
+
+/// Registro de disparo de um evento econômico.
+model EventoAtivo {
+  id         String         @id @default(cuid())
+  templateId String
+  template   EventoTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  rodadaId String?
+  rodada   Rodada? @relation(fields: [rodadaId], references: [id], onDelete: SetNull)
+
+  noticiaId String?
+  noticia   Noticia? @relation(fields: [noticiaId], references: [id], onDelete: SetNull)
+
+  disparadoEm        DateTime @default(now())
+  disparadoPorUserId String
+  disparadoPor       User     @relation("EventoDisparadoPor", fields: [disparadoPorUserId], references: [id])
+
+  @@index([templateId])
+  @@index([rodadaId])
+  @@index([disparadoEm])
 }

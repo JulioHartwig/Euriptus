@@ -6,14 +6,20 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import type { EmpresaTipo, Role } from "@prisma/client";
 import {
+  Building2,
+  CalendarClock,
   GraduationCap,
   Handshake,
   Landmark,
   LayoutDashboard,
   Loader2,
   LogOut,
+  Megaphone,
   Menu,
+  Package,
+  Settings,
   TrendingUp,
+  Users,
   Wallet,
 } from "lucide-react";
 
@@ -48,6 +54,17 @@ const ROTA_PROFESSOR: NavItem = {
   icon: GraduationCap,
 };
 
+const ROTAS_PROFESSOR: NavItem[] = [
+  ROTA_PROFESSOR,
+  { href: "/professor/rodadas", label: "Rodadas", icon: CalendarClock },
+  { href: "/professor/eventos", label: "Eventos", icon: Megaphone },
+  { href: "/professor/noticias", label: "Notícias", icon: GraduationCap },
+  { href: "/professor/parametros", label: "Parâmetros", icon: Settings },
+  { href: "/professor/catalogo", label: "Catálogo", icon: Package },
+  { href: "/professor/empresas", label: "Empresas", icon: Building2 },
+  { href: "/professor/usuarios", label: "Usuários", icon: Users },
+];
+
 export type AppShellUser = {
   nome: string;
   email: string;
@@ -74,7 +91,7 @@ export function AppShell({
 
   const isTeacher = user.role === "TEACHER";
   const todasAsRotas = isTeacher
-    ? [...ROTAS_PRINCIPAIS, ROTA_PROFESSOR]
+    ? [...ROTAS_PRINCIPAIS, ...ROTAS_PROFESSOR]
     : ROTAS_PRINCIPAIS;
 
   const rotaAtual = todasAsRotas.find(
@@ -191,7 +208,7 @@ export function AppShell({
 
         <footer className="mx-auto w-full max-w-6xl px-4 pb-6 pt-2 text-xs text-muted-foreground sm:px-6 lg:px-10">
           <p>Euriptus · Simulador educacional da cadeia produtiva do café.</p>
-          <p className="mt-1">Iteração 1 — autenticação, empresas e estrutura do app.</p>
+          <p className="mt-1">Iteração 9 — eventos econômicos.</p>
         </footer>
       </div>
     </div>
@@ -246,13 +263,15 @@ function SidebarContent({
               Gestão
             </p>
             <ul className="space-y-1">
-              <li>
-                <NavLink
-                  item={ROTA_PROFESSOR}
-                  pathname={pathname}
-                  onNavigate={onNavigate}
-                />
-              </li>
+              {ROTAS_PROFESSOR.map((item) => (
+                <li key={item.href}>
+                  <NavLink
+                    item={item}
+                    pathname={pathname}
+                    onNavigate={onNavigate}
+                  />
+                </li>
+              ))}
             </ul>
           </div>
         )}
@@ -271,7 +290,7 @@ function SidebarContent({
           </p>
         </div>
         <p className="mt-3 px-1 text-[0.65rem] leading-relaxed text-sidebar-muted">
-          Iteração 1 · base do simulador
+          Iteração 9 · eventos
         </p>
       </div>
     </div>

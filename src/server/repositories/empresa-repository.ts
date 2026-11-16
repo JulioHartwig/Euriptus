@@ -39,3 +39,25 @@ export function findEmpresaById(id: string) {
     },
   });
 }
+
+const empresaDoUsuarioSelect = {
+  id: true,
+  nome: true,
+  tipo: true,
+  saldo: true,
+} satisfies Prisma.EmpresaSelect;
+
+export type EmpresaDoUsuario = Prisma.EmpresaGetPayload<{
+  select: typeof empresaDoUsuarioSelect;
+}>;
+
+/**
+ * Empresa vinculada ao usuário. Funciona mesmo que o JWT esteja desatualizado,
+ * pois consulta a relação atual no banco. Professores retornam `null`.
+ */
+export function findEmpresaDoUsuario(userId: string) {
+  return prisma.empresa.findFirst({
+    where: { usuarios: { some: { id: userId } } },
+    select: empresaDoUsuarioSelect,
+  });
+}
