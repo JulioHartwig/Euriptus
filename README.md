@@ -259,6 +259,30 @@ NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="cole-aqui-o-segredo-gerado"
 ```
 
+### Integração com o Neon CLI (opcional)
+
+Com o [Neon CLI](https://neon.com/docs/cli) autenticado, é possível vincular o projeto e puxar as
+credenciais automaticamente:
+
+```bash
+neon login
+neon init -y --org-id <org-id> --project-id <project-id> --branch production --services postgres
+neon deploy
+```
+
+O `neon env pull`/`neon deploy` grava `DATABASE_URL` (pooled) e `DATABASE_URL_UNPOOLED`
+(direta) no `.env`. Como este projeto usa `DIRECT_URL` para migrations (compatível com o
+`directUrl` do Prisma), mantenha `DIRECT_URL` com o mesmo valor de `DATABASE_URL_UNPOOLED`:
+
+```env
+DATABASE_URL="postgresql://...-pooler.../neondb?sslmode=require"
+DATABASE_URL_UNPOOLED="postgresql://.../neondb?sslmode=require"
+DIRECT_URL="postgresql://.../neondb?sslmode=require"
+```
+
+Regras gerais: **pooled** (`-pooler`) para o runtime do app; **direta** para migrations
+(`npx prisma migrate deploy`). O arquivo `.env` e o `.neon` já estão no `.gitignore`.
+
 ---
 
 ## Estrutura do projeto
