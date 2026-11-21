@@ -7,9 +7,11 @@ import { EMPRESA_TIPO_LABEL } from "@/lib/empresa";
 import { requireUser } from "@/server/auth/session";
 import { getEmpresaDoUsuario } from "@/server/services/empresa-service";
 import {
+  getCapacidade,
   getCatalogo,
   getEstoque,
   getEstoqueTotal,
+  getProdutos,
 } from "@/server/services/mercado-service";
 
 import { MercadoView } from "./mercado-view";
@@ -62,11 +64,14 @@ export default async function MercadoPage() {
     );
   }
 
-  const [catalogo, estoque, estoqueTotal] = await Promise.all([
-    getCatalogo(empresa.tipo),
-    getEstoque(empresa.id),
-    getEstoqueTotal(empresa.id),
-  ]);
+  const [catalogo, estoque, estoqueTotal, capacidade, produtos] =
+    await Promise.all([
+      getCatalogo(empresa.tipo),
+      getEstoque(empresa.id),
+      getEstoqueTotal(empresa.id),
+      getCapacidade(empresa.id, empresa.tipo),
+      Promise.resolve(getProdutos(empresa.tipo)),
+    ]);
 
   return (
     <MercadoView
@@ -82,15 +87,26 @@ export default async function MercadoPage() {
         unidade: item.unidade,
         preco: Number(item.preco),
         empresaTipo: item.empresaTipo,
+        categoria: item.categoria,
+        aumentoCapacidade: item.aumentoCapacidade,
+        aumentoMarketing: Number(item.aumentoMarketing),
       }))}
       estoque={estoque.map((item) => ({
         id: item.id,
         quantidade: item.quantidade,
+        valorTotal: Number(item.valorTotal),
         nome: item.catalogoItem.nome,
         unidade: item.catalogoItem.unidade,
         preco: Number(item.catalogoItem.preco),
       }))}
-      estoqueTotal={estoqueTotal}
+      estoqueTotal={estoqueTotal.quantidade}
+      estoqueValorTotal={estoqueTotal.valorTotal}
+      capacidade={capacidade}
+      produtos={produtos.map((produto) => ({
+        id: produto.id,
+        nome: produto.nome,
+        unidade: produto.unidade,
+      }))}
     />
   );
 }

@@ -66,9 +66,20 @@ export default async function BancoPage() {
         valorPrincipal: Number(emprestimo.valorPrincipal),
         taxaJurosMensal: Number(emprestimo.taxaJurosMensal),
         totalDevido: Number(emprestimo.totalDevido),
+        numeroParcelas: emprestimo.numeroParcelas,
+        valorParcela: Number(emprestimo.valorParcela),
+        descontoAplicado: Number(emprestimo.descontoAplicado),
         status: emprestimo.status,
         criadoEm: emprestimo.criadoEm.toISOString(),
         autor: emprestimo.criadoPor.nome,
+        parcelas: emprestimo.parcelas.map((parcela) => ({
+          id: parcela.id,
+          numero: parcela.numero,
+          valor: Number(parcela.valor),
+          vencimento: parcela.vencimento.toISOString(),
+          status: parcela.status,
+          valorPago: parcela.valorPago === null ? null : Number(parcela.valorPago),
+        })),
       }))}
       investimentos={investimentos.map((investimento) => ({
         id: investimento.id,
@@ -78,6 +89,10 @@ export default async function BancoPage() {
           investimento.valorResgate === null
             ? null
             : Number(investimento.valorResgate),
+        taxaResgateAplicada:
+          investimento.taxaResgateAplicada === null
+            ? null
+            : Number(investimento.taxaResgateAplicada),
         status: investimento.status,
         criadoEm: investimento.criadoEm.toISOString(),
         resgatadoEm: investimento.resgatadoEm?.toISOString() ?? null,

@@ -22,6 +22,7 @@ export default async function RodadasProfessorPage() {
       rodadas={rodadas.map((r) => ({
         id: r.id,
         numero: r.numero,
+        competencia: r.competencia?.toISOString() ?? null,
         status: r.status,
         abertaEm: r.abertaEm.toISOString(),
         abertaPor: r.abertaPor.nome,

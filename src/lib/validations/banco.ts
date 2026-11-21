@@ -26,6 +26,11 @@ const valorMonetarioSchema = z.preprocess(
 
 export const solicitarEmprestimoSchema = z.object({
   valor: valorMonetarioSchema,
+  parcelas: z.coerce
+    .number({ error: "Informe a quantidade de parcelas." })
+    .int("A quantidade de parcelas deve ser inteira.")
+    .min(1, "Escolha ao menos 1 parcela.")
+    .max(12, "O máximo é 12 parcelas."),
 });
 
 export const aplicarInvestimentoSchema = z.object({
@@ -38,6 +43,18 @@ export const resgatarInvestimentoSchema = z.object({
     .min(1, "Investimento inválido."),
 });
 
+export const pagarParcelaSchema = z.object({
+  parcelaId: z.string({ error: "Parcela inválida." }).min(1, "Parcela inválida."),
+});
+
+export const quitarEmprestimoSchema = z.object({
+  emprestimoId: z
+    .string({ error: "Empréstimo inválido." })
+    .min(1, "Empréstimo inválido."),
+});
+
 export type SolicitarEmprestimoInput = z.infer<typeof solicitarEmprestimoSchema>;
 export type AplicarInvestimentoInput = z.infer<typeof aplicarInvestimentoSchema>;
 export type ResgatarInvestimentoInput = z.infer<typeof resgatarInvestimentoSchema>;
+export type PagarParcelaInput = z.infer<typeof pagarParcelaSchema>;
+export type QuitarEmprestimoInput = z.infer<typeof quitarEmprestimoSchema>;

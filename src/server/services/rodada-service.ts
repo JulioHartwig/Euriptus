@@ -1,7 +1,9 @@
+import { proximaCompetencia } from "@/lib/rodada";
 import { prisma } from "@/lib/prisma";
 import {
   criarRodada,
   findRodadaAberta,
+  findUltimaRodada,
   getUltimoNumero,
   listRodadas,
 } from "@/server/repositories/rodada-repository";
@@ -24,10 +26,20 @@ export async function getRodadaAbertaId() {
 
 export async function getRodadaAtualInfo() {
   const aberta = await findRodadaAberta();
-  if (aberta) return { numero: aberta.numero, status: aberta.status as "ABERTA" };
-  const ultima = await prisma.rodada.findFirst({ orderBy: { numero: "desc" } });
+  if (aberta) {
+    return {
+      numero: aberta.numero,
+      competencia: aberta.competencia,
+      status: aberta.status as "ABERTA",
+    };
+  }
+  const ultima = await findUltimaRodada();
   if (!ultima) return null;
-  return { numero: ultima.numero, status: ultima.status as "FECHADA" };
+  return {
+    numero: ultima.numero,
+    competencia: ultima.competencia,
+    status: ultima.status as "FECHADA",
+  };
 }
 
 export function getRodadas() {
@@ -37,9 +49,10 @@ export function getRodadas() {
 export async function abrirRodada(userId: string) {
   const aberta = await findRodadaAberta();
   if (aberta) throw new RodadaError("Já existe uma rodada aberta. Feche-a antes de abrir outra.");
-  const max = await getUltimoNumero();
+  const [max, ultima] = await Promise.all([getUltimoNumero(), findUltimaRodada()]);
   const numero = (max._max.numero ?? 0) + 1;
-  return criarRodada(numero, userId);
+  const competencia = proximaCompetencia(ultima?.competencia ?? null);
+  return criarRodada(numero, userId, competencia);
 }
 
 export async function fecharEProcessarRodada(userId: string) {
@@ -64,7 +77,17 @@ export async function fecharEProcessarRodada(userId: string) {
       select: {
         id: true,
         custosFixos: { where: { ativo: true }, select: { descricao: true, valor: true } },
-        emprestimos: { where: { status: "ATIVO" }, select: { id: true, totalDevido: true } },
+        emprestimos: {
+          where: { status: "ATIVO" },
+          select: {
+            id: true,
+            parcelas: {
+              where: { status: "PENDENTE", vencimento: { lte: new Date() } },
+              select: { id: true, numero: true, valor: true },
+              orderBy: { numero: "asc" },
+            },
+          },
+        },
       },
     });
 
@@ -107,21 +130,45 @@ export async function fecharEProcessarRodada(userId: string) {
           },
         });
       }
-      // quitação automática de empréstimos ativos quando há saldo suficiente
+      // pagamento automático das parcelas vencidas no mês, quando há saldo
       for (const empst of emp.emprestimos) {
-        const devido = Number(empst.totalDevido);
-        const quitou = await tx.empresa.updateMany({
-          where: { id: emp.id, saldo: { gte: devido } },
-          data: { saldo: { decrement: devido } },
-        });
-        if (quitou.count > 0) {
-          await tx.emprestimo.update({ where: { id: empst.id }, data: { status: "QUITADO" } });
-          await tx.transacao.create({
+        for (const parcela of empst.parcelas) {
+          const valor = Number(parcela.valor);
+          const pagou = await tx.empresa.updateMany({
+            where: { id: emp.id, saldo: { gte: valor } },
+            data: { saldo: { decrement: valor } },
+          });
+          if (pagou.count === 0) continue;
+
+          await tx.parcelaEmprestimo.update({
+            where: { id: parcela.id },
             data: {
-              empresaId: emp.id, tipo: "JUROS", descricao: "Quitação de empréstimo (rodada)",
-              valor: devido, rodadaId: aberta.id, criadoPorUserId: userId,
+              status: "PAGA",
+              valorPago: valor,
+              pagaEm: new Date(),
+              pagaPorUserId: userId,
             },
           });
+          await tx.transacao.create({
+            data: {
+              empresaId: emp.id,
+              tipo: "PAGAMENTO_EMPRESTIMO",
+              descricao: `Pagamento automático da parcela ${parcela.numero} (fechamento da rodada)`,
+              valor,
+              rodadaId: aberta.id,
+              criadoPorUserId: userId,
+            },
+          });
+
+          const pendentes = await tx.parcelaEmprestimo.count({
+            where: { emprestimoId: empst.id, status: "PENDENTE" },
+          });
+          if (pendentes === 0) {
+            await tx.emprestimo.update({
+              where: { id: empst.id },
+              data: { status: "QUITADO", quitadoEm: new Date() },
+            });
+          }
         }
       }
     }

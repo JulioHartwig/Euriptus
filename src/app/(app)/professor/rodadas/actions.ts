@@ -22,6 +22,9 @@ function revalidar() {
   revalidatePath("/banco");
   revalidatePath("/mercado");
   revalidatePath("/negociacoes");
+  revalidatePath("/estoque");
+  revalidatePath("/historico");
+  revalidatePath("/alertas");
 }
 
 export async function abrirRodadaAction(): Promise<RodadaActionState> {

@@ -20,4 +20,7 @@ export const comprarItemSchema = z.object({
   ),
 });
 
+export const registrarProducaoSchema = comprarItemSchema;
+
 export type ComprarItemInput = z.infer<typeof comprarItemSchema>;
+export type RegistrarProducaoInput = z.infer<typeof registrarProducaoSchema>;

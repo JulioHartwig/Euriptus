@@ -6,10 +6,12 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import type { EmpresaTipo, Role } from "@prisma/client";
 import {
+  Bell,
   Building2,
   CalendarClock,
   GraduationCap,
   Handshake,
+  History,
   Landmark,
   LayoutDashboard,
   Loader2,
@@ -43,9 +45,12 @@ type NavItem = {
 const ROTAS_PRINCIPAIS: NavItem[] = [
   { href: "/painel", label: "Painel", icon: LayoutDashboard },
   { href: "/mercado", label: "Mercado", icon: TrendingUp },
+  { href: "/estoque", label: "Estoque", icon: Package },
   { href: "/negociacoes", label: "Negociações", icon: Handshake },
   { href: "/financeiro", label: "Financeiro", icon: Wallet },
+  { href: "/historico", label: "Histórico", icon: History },
   { href: "/banco", label: "Banco", icon: Landmark },
+  { href: "/alertas", label: "Alertas", icon: Bell },
 ];
 
 const ROTA_PROFESSOR: NavItem = {
@@ -79,10 +84,12 @@ export type AppShellEmpresa = {
 export function AppShell({
   user,
   empresa,
+  quantidadeAlertas = 0,
   children,
 }: {
   user: AppShellUser;
   empresa: AppShellEmpresa;
+  quantidadeAlertas?: number;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -163,6 +170,28 @@ export function AppShell({
           </div>
 
           <div className="flex min-w-0 items-center gap-3">
+            <Button
+              asChild
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="relative shrink-0"
+              aria-label={
+                quantidadeAlertas > 0
+                  ? `Alertas: ${quantidadeAlertas} pendências`
+                  : "Abrir central de alertas"
+              }
+            >
+              <Link href="/alertas">
+                <Bell className="h-5 w-5" />
+                {quantidadeAlertas > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.6rem] font-semibold text-destructive-foreground">
+                    {quantidadeAlertas > 9 ? "9+" : quantidadeAlertas}
+                  </span>
+                )}
+              </Link>
+            </Button>
+
             <div className="min-w-0 text-right">
               <p className="max-w-[8.5rem] truncate text-sm font-medium sm:max-w-[14rem]">
                 {user.nome}

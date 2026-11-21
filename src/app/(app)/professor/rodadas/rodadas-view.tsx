@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import type { RodadaActionState } from "@/lib/rodada";
+import { formatarCompetencia, type RodadaActionState } from "@/lib/rodada";
 import { formatDateTime } from "@/lib/utils";
 
 import { abrirRodadaAction, fecharRodadaAction } from "./actions";
@@ -18,6 +18,7 @@ import { abrirRodadaAction, fecharRodadaAction } from "./actions";
 type RodadaRow = {
   id: string;
   numero: number;
+  competencia: string | null;
   status: "ABERTA" | "FECHADA";
   abertaEm: string;
   abertaPor: string;
@@ -47,7 +48,7 @@ export function RodadasView({ rodadas }: { rodadas: RodadaRow[] }) {
       <PageHeader
         eyebrow="Professor"
         title="Rodadas"
-        description="Abra e feche rodadas. Ao fechar, a rodada é processada."
+        description="Cada rodada representa um mês. Abra e feche rodadas para processar o período."
         actions={
           <div className="flex gap-2">
             {!aberta ? (
@@ -61,7 +62,10 @@ export function RodadasView({ rodadas }: { rodadas: RodadaRow[] }) {
               <form action={aFechar}>
                 <Button type="submit" variant="destructive" disabled={pFechar}>
                   {pFechar ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4" />}
-                  Fechar e processar rodada {aberta.numero}
+                  Fechar {formatarCompetencia(
+                    aberta.competencia ? new Date(aberta.competencia) : null,
+                    aberta.numero,
+                  )}
                 </Button>
               </form>
             )}
@@ -73,9 +77,10 @@ export function RodadasView({ rodadas }: { rodadas: RodadaRow[] }) {
         <CalendarClock aria-hidden="true" className="h-4 w-4" />
         <AlertTitle>Processamento ao fechar</AlertTitle>
         <AlertDescription>
-          Ao fechar, são aplicados por empresa: custos fixos ativos (despesa), salário mínimo (salário),
-          imposto sobre receitas da rodada e quitação automática de empréstimos ativos quando houver
-          saldo suficiente. Lançamentos são vinculados à rodada e registram autoria do professor.
+          Cada rodada equivale a um mês (competência). Ao fechar, são aplicados por empresa: custos
+          fixos ativos (despesa), salário mínimo (salário), imposto sobre receitas da rodada e
+          pagamento automático das parcelas de empréstimo vencidas no mês quando houver saldo.
+          Lançamentos são vinculados à rodada e registram autoria do professor.
         </AlertDescription>
       </Alert>
 
@@ -93,7 +98,13 @@ export function RodadasView({ rodadas }: { rodadas: RodadaRow[] }) {
                 <li key={r.id} className="flex flex-wrap items-start justify-between gap-3 py-4 first:pt-0 last:pb-0">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">Rodada {r.numero}</span>
+                      <span className="font-medium">
+                        Rodada {r.numero} ·{" "}
+                        {formatarCompetencia(
+                          r.competencia ? new Date(r.competencia) : null,
+                          r.numero,
+                        )}
+                      </span>
                       <Badge variant={r.status === "ABERTA" ? "default" : "secondary"}>
                         {r.status === "ABERTA" ? "Aberta" : "Fechada"}
                       </Badge>

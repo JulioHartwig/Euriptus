@@ -1,4 +1,4 @@
-import { EmpresaTipo, NoticiaTipo, Role } from "@prisma/client";
+import { CatalogoItemCategoria, EmpresaTipo, NoticiaTipo, Role } from "@prisma/client";
 import { z } from "zod";
 
 export const noticiaSchema = z.object({
@@ -22,6 +22,15 @@ export const catalogoSchema = z.object({
   unidade: z.string().trim().min(1).max(40),
   preco: z.preprocess((v) => (typeof v === "string" ? Number(v.replace(",", ".")) : v), z.number().positive().max(1_000_000_000)),
   empresaTipo: z.preprocess((v) => (v === "" || v === "TODAS" ? null : v), z.nativeEnum(EmpresaTipo).nullable()),
+  categoria: z.preprocess((v) => v || CatalogoItemCategoria.INSUMO, z.nativeEnum(CatalogoItemCategoria)),
+  aumentoCapacidade: z.preprocess(
+    (v) => (typeof v === "string" ? Number(v.replace(",", ".")) : v ?? 0),
+    z.number().int().min(0).max(10_000),
+  ),
+  aumentoMarketing: z.preprocess(
+    (v) => (typeof v === "string" ? Number(v.replace(",", ".")) : v ?? 0),
+    z.number().min(0).max(1),
+  ),
   ativo: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
 });
 

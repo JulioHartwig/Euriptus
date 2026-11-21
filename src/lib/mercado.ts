@@ -1,3 +1,10 @@
+/** Rótulos das categorias do catálogo. */
+export const CATEGORIA_ITEM_LABEL = {
+  INSUMO: "Insumo",
+  PRODUTO: "Produto",
+  MELHORIA: "Melhoria",
+} as const;
+
 /**
  * Estado compartilhado entre o formulário do Mercado e a Server Action.
  * `submittedAt` garante feedback a cada envio, mesmo com mensagens iguais.

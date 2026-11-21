@@ -12,9 +12,13 @@ import {
   AlertCircle,
   ArrowRight,
   BadgeDollarSign,
+  CalendarDays,
+  Check,
+  Clock,
   Landmark,
   Loader2,
   PiggyBank,
+  Scissors,
   TrendingUp,
   Wallet,
   type LucideIcon,
@@ -47,27 +51,44 @@ import {
   arredondarValor,
   calcularLimiteEmprestimo,
   calcularTotalDevido,
+  calcularValorParcela,
   calcularValorResgate,
   formatarTaxa,
   LIMITE_EMPRESTIMO_MULTIPLICADOR,
+  MAX_PARCELAS_EMPRESTIMO,
 } from "@/lib/banco";
 import type { BancoActionState } from "@/lib/banco";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
 import {
   aplicarInvestimentoAction,
+  pagarParcelaAction,
+  quitarEmprestimoAction,
   resgatarInvestimentoAction,
   solicitarEmprestimoAction,
 } from "./actions";
+
+export type ParcelaView = {
+  id: string;
+  numero: number;
+  valor: number;
+  vencimento: string;
+  status: "PENDENTE" | "PAGA";
+  valorPago: number | null;
+};
 
 export type EmprestimoView = {
   id: string;
   valorPrincipal: number;
   taxaJurosMensal: number;
   totalDevido: number;
+  numeroParcelas: number;
+  valorParcela: number;
+  descontoAplicado: number;
   status: "ATIVO" | "QUITADO";
   criadoEm: string;
   autor: string;
+  parcelas: ParcelaView[];
 };
 
 export type InvestimentoView = {
@@ -75,6 +96,7 @@ export type InvestimentoView = {
   valorAplicado: number;
   taxaRendimentoMensal: number;
   valorResgate: number | null;
+  taxaResgateAplicada: number | null;
   status: "ATIVO" | "RESGATADO";
   criadoEm: string;
   resgatadoEm: string | null;
@@ -85,6 +107,8 @@ export type InvestimentoView = {
 export type TaxasBancoView = {
   jurosMensal: number;
   rendimentoMensal: number;
+  descontoQuitacao: number;
+  taxaResgateAntecipado: number;
 };
 
 export type BancoViewProps = {
@@ -141,10 +165,12 @@ export function BancoView({
           <AlertTitle>Como o banco funciona nesta etapa</AlertTitle>
           <AlertDescription>
             Empréstimos de até {LIMITE_EMPRESTIMO_MULTIPLICADOR}× o saldo atual são
-            creditados na hora, com juros de {formatarTaxa(taxas.jurosMensal)} ao mês.
-            Aplicações rendem {formatarTaxa(taxas.rendimentoMensal)} ao mês (metade dos
-            juros) e podem ser resgatadas com principal + um mês de rendimento. A
-            quitação automática e o rendimento por rodada chegam na Etapa 7.
+            creditados na hora, com juros de {formatarTaxa(taxas.jurosMensal)} por mês
+            de prazo. Você pode pagar cada parcela separadamente ou quitar o contrato
+            com {formatarTaxa(taxas.descontoQuitacao)} de desconto. Aplicações rendem{" "}
+            {formatarTaxa(taxas.rendimentoMensal)} ao mês; resgates na mesma rodada
+            não rendem e pagam {formatarTaxa(taxas.taxaResgateAntecipado)} de taxa de
+            resgate antecipado.
           </AlertDescription>
         </Alert>
       )}
@@ -199,13 +225,20 @@ export function BancoView({
           <InvestimentoForm
             saldo={empresa.saldo}
             taxaRendimentoMensal={taxas.rendimentoMensal}
+            taxaResgateAntecipado={taxas.taxaResgateAntecipado}
           />
         </div>
       )}
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <EmprestimosLista emprestimos={emprestimos} />
-        <InvestimentosLista investimentos={investimentos} />
+        <EmprestimosLista
+          emprestimos={emprestimos}
+          descontoQuitacao={taxas?.descontoQuitacao ?? 0}
+        />
+        <InvestimentosLista
+          investimentos={investimentos}
+          taxaResgateAntecipado={taxas?.taxaResgateAntecipado ?? 0}
+        />
       </div>
     </div>
   );
@@ -258,6 +291,7 @@ function EmprestimoForm({
   const formRef = useRef<HTMLFormElement>(null);
   const confirmando = useRef(false);
   const [valor, setValor] = useState("");
+  const [parcelas, setParcelas] = useState(1);
   const [dialogoAberto, setDialogoAberto] = useState(false);
   const [estado, formAction, pendente] = useActionState(
     solicitarEmprestimoAction,
@@ -280,8 +314,10 @@ function EmprestimoForm({
     saldo > 0;
   const totalDevido =
     valorValido && valorNumerico !== null
-      ? calcularTotalDevido(valorNumerico, taxaJurosMensal)
+      ? calcularTotalDevido(valorNumerico, taxaJurosMensal, parcelas)
       : null;
+  const valorDaParcela =
+    totalDevido !== null ? calcularValorParcela(totalDevido, parcelas) : null;
   const erroCampo = estado.status === "error" ? estado.fieldErrors?.valor?.[0] : undefined;
   const erroGeral = estado.status === "error" && !erroCampo ? estado.message : null;
 
@@ -362,11 +398,44 @@ function EmprestimoForm({
             )}
           </div>
 
-          <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
-            <span className="text-muted-foreground">Total a pagar em 1 mês: </span>
-            <span className="font-semibold">
-              {totalDevido !== null ? formatCurrency(totalDevido) : "—"}
-            </span>
+          <div className="space-y-2">
+            <Label htmlFor="emprestimo-parcelas">Quantidade de parcelas</Label>
+            <select
+              id="emprestimo-parcelas"
+              name="parcelas"
+              value={parcelas}
+              onChange={(event) => setParcelas(Number(event.target.value))}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={pendente || limite <= 0}
+            >
+              {Array.from({ length: MAX_PARCELAS_EMPRESTIMO }, (_, indice) => {
+                const numero = indice + 1;
+                return (
+                  <option key={numero} value={numero}>
+                    {numero}x de {numero === 1 ? "1 mês" : `${numero} meses`}
+                  </option>
+                );
+              })}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Os juros incidem sobre cada mês de prazo. Cada parcela vence a cada
+              mês, acompanhando as rodadas.
+            </p>
+          </div>
+
+          <div className="space-y-1.5 rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Valor de cada parcela:</span>
+              <span className="font-semibold">
+                {valorDaParcela !== null ? formatCurrency(valorDaParcela) : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Total a pagar:</span>
+              <span className="font-semibold">
+                {totalDevido !== null ? formatCurrency(totalDevido) : "—"}
+              </span>
+            </div>
           </div>
 
           <Button type="submit" className="w-full" disabled={pendente || limite <= 0}>
@@ -389,8 +458,8 @@ function EmprestimoForm({
             <AlertDialogHeader>
               <AlertDialogTitle>Confirmar empréstimo</AlertDialogTitle>
               <AlertDialogDescription>
-                O valor será creditado agora no saldo da empresa. A dívida total já
-                inclui um mês de juros.
+                O valor será creditado agora no saldo da empresa. A dívida inclui
+                os juros de {parcelas} {parcelas === 1 ? "mês" : "meses"} de prazo.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <dl className="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">
@@ -399,7 +468,11 @@ function EmprestimoForm({
                 valor={formatCurrency(valorNumerico ?? 0)}
               />
               <LinhaResumo
-                rotulo="Juros mensais"
+                rotulo="Parcelas"
+                valor={`${parcelas}x de ${valorDaParcela !== null ? formatCurrency(valorDaParcela) : "—"}`}
+              />
+              <LinhaResumo
+                rotulo="Juros por mês"
                 valor={formatarTaxa(taxaJurosMensal)}
               />
               <LinhaResumo
@@ -424,9 +497,11 @@ function EmprestimoForm({
 function InvestimentoForm({
   saldo,
   taxaRendimentoMensal,
+  taxaResgateAntecipado,
 }: {
   saldo: number;
   taxaRendimentoMensal: number;
+  taxaResgateAntecipado: number;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -522,8 +597,8 @@ function InvestimentoForm({
               />
             </div>
             <p id="investimento-ajuda" className="text-xs text-muted-foreground">
-              Saldo disponível: {formatCurrency(saldo)}. O valor sai do caixa e volta
-              com rendimento no resgate.
+              Saldo disponível: {formatCurrency(saldo)}. Resgates na mesma rodada não
+              rendem e perdem {formatarTaxa(taxaResgateAntecipado)} do valor aplicado.
             </p>
             {(erroCampo || erroGeral) && (
               <p id="investimento-erro" className="text-xs font-medium text-destructive">
@@ -590,7 +665,13 @@ function InvestimentoForm({
   );
 }
 
-function EmprestimosLista({ emprestimos }: { emprestimos: EmprestimoView[] }) {
+function EmprestimosLista({
+  emprestimos,
+  descontoQuitacao,
+}: {
+  emprestimos: EmprestimoView[];
+  descontoQuitacao: number;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -598,7 +679,8 @@ function EmprestimosLista({ emprestimos }: { emprestimos: EmprestimoView[] }) {
           Empréstimos
         </h2>
         <CardDescription>
-          Contratos ativos e quitados, do mais recente para o mais antigo.
+          Contratos ativos e quitados, do mais recente para o mais antigo. Pague
+          parcelas ou quite antecipadamente com desconto.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -613,45 +695,11 @@ function EmprestimosLista({ emprestimos }: { emprestimos: EmprestimoView[] }) {
         ) : (
           <ul className="divide-y">
             {emprestimos.map((emprestimo) => (
-              <li
+              <EmprestimoLinha
                 key={emprestimo.id}
-                className="flex flex-wrap items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-display text-base font-semibold">
-                      {formatCurrency(emprestimo.valorPrincipal)}
-                    </span>
-                    <Badge
-                      variant={
-                        emprestimo.status === "ATIVO" ? "default" : "secondary"
-                      }
-                    >
-                      {emprestimo.status === "ATIVO" ? "Ativo" : "Quitado"}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Contratado em {formatDate(emprestimo.criadoEm)} por{" "}
-                    {emprestimo.autor}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Juros de {formatarTaxa(emprestimo.taxaJurosMensal)} ao mês
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[0.68rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    Total a pagar
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-1 font-display text-base font-semibold",
-                      emprestimo.status === "ATIVO" && "text-amber-700",
-                    )}
-                  >
-                    {formatCurrency(emprestimo.totalDevido)}
-                  </p>
-                </div>
-              </li>
+                emprestimo={emprestimo}
+                descontoQuitacao={descontoQuitacao}
+              />
             ))}
           </ul>
         )}
@@ -660,10 +708,247 @@ function EmprestimosLista({ emprestimos }: { emprestimos: EmprestimoView[] }) {
   );
 }
 
+function EmprestimoLinha({
+  emprestimo,
+  descontoQuitacao,
+}: {
+  emprestimo: EmprestimoView;
+  descontoQuitacao: number;
+}) {
+  const router = useRouter();
+  const [estadoPagamento, formActionPagamento, pendentePagamento] = useActionState(
+    pagarParcelaAction,
+    ESTADO_INICIAL,
+  );
+  const [estadoQuitacao, formActionQuitacao, pendenteQuitacao] = useActionState(
+    quitarEmprestimoAction,
+    ESTADO_INICIAL,
+  );
+  const [parcelaParaPagar, setParcelaParaPagar] = useState<ParcelaView | null>(null);
+  const [dialogoQuitacao, setDialogoQuitacao] = useState(false);
+  const formPagamentoRef = useRef<HTMLFormElement>(null);
+  const formQuitacaoRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (estadoPagamento.status === "success") {
+      toast.success(estadoPagamento.message);
+      setParcelaParaPagar(null);
+      router.refresh();
+    } else if (estadoPagamento.status === "error") {
+      toast.error(estadoPagamento.message);
+    }
+  }, [estadoPagamento, router]);
+
+  useEffect(() => {
+    if (estadoQuitacao.status === "success") {
+      toast.success(estadoQuitacao.message);
+      setDialogoQuitacao(false);
+      router.refresh();
+    } else if (estadoQuitacao.status === "error") {
+      toast.error(estadoQuitacao.message);
+    }
+  }, [estadoQuitacao, router]);
+
+  const pendentes = emprestimo.parcelas.filter(
+    (parcela) => parcela.status === "PENDENTE",
+  );
+  const saldoDevedor = arredondarValor(
+    pendentes.reduce((total, parcela) => total + parcela.valor, 0),
+  );
+  const desconto = arredondarValor(saldoDevedor * descontoQuitacao);
+  const valorQuitacao = arredondarValor(saldoDevedor - desconto);
+
+  return (
+    <li className="py-4 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-display text-base font-semibold">
+              {formatCurrency(emprestimo.valorPrincipal)}
+            </span>
+            <Badge
+              variant={emprestimo.status === "ATIVO" ? "default" : "secondary"}
+            >
+              {emprestimo.status === "ATIVO" ? "Ativo" : "Quitado"}
+            </Badge>
+            <Badge variant="outline" className="gap-1">
+              <CalendarDays aria-hidden="true" className="h-3 w-3" />
+              {emprestimo.numeroParcelas}x
+            </Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Contratado em {formatDate(emprestimo.criadoEm)} por {emprestimo.autor}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Juros de {formatarTaxa(emprestimo.taxaJurosMensal)} por mês · parcelas de{" "}
+            {formatCurrency(emprestimo.valorParcela)}
+          </p>
+          {emprestimo.descontoAplicado > 0 && (
+            <p className="mt-1 text-xs font-medium text-emerald-700">
+              Desconto de {formatCurrency(emprestimo.descontoAplicado)} na quitação
+              antecipada
+            </p>
+          )}
+        </div>
+        <div className="text-right">
+          <p className="text-[0.68rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            Saldo devedor
+          </p>
+          <p
+            className={cn(
+              "mt-1 font-display text-base font-semibold",
+              emprestimo.status === "ATIVO" && "text-amber-700",
+            )}
+          >
+            {formatCurrency(
+              emprestimo.status === "ATIVO" ? saldoDevedor : emprestimo.totalDevido,
+            )}
+          </p>
+        </div>
+      </div>
+
+      <ul className="mt-3 space-y-1.5 rounded-lg border bg-muted/20 px-3 py-2.5">
+        {emprestimo.parcelas.map((parcela) => (
+          <li
+            key={parcela.id}
+            className="flex flex-wrap items-center justify-between gap-2 text-xs"
+          >
+            <span className="flex items-center gap-2 text-muted-foreground">
+              {parcela.status === "PAGA" ? (
+                <Check aria-hidden="true" className="h-3.5 w-3.5 text-emerald-600" />
+              ) : (
+                <Clock aria-hidden="true" className="h-3.5 w-3.5 text-amber-600" />
+              )}
+              Parcela {parcela.numero} · vence em {formatDate(parcela.vencimento)}
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="font-medium">
+                {formatCurrency(parcela.valorPago ?? parcela.valor)}
+              </span>
+              {parcela.status === "PENDENTE" && emprestimo.status === "ATIVO" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setParcelaParaPagar(parcela)}
+                  disabled={pendentePagamento || pendenteQuitacao}
+                >
+                  Pagar
+                </Button>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {emprestimo.status === "ATIVO" && pendentes.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Quitação antecipada: {formatCurrency(valorQuitacao)} com{" "}
+            {formatCurrency(desconto)} de desconto (
+            {formatarTaxa(descontoQuitacao)}).
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setDialogoQuitacao(true)}
+            disabled={pendentePagamento || pendenteQuitacao}
+          >
+            <Scissors aria-hidden="true" className="h-3.5 w-3.5" />
+            Quitar com desconto
+          </Button>
+        </div>
+      )}
+
+      <form ref={formPagamentoRef} action={formActionPagamento}>
+        <input type="hidden" name="parcelaId" value={parcelaParaPagar?.id ?? ""} />
+      </form>
+      <AlertDialog
+        open={parcelaParaPagar !== null}
+        onOpenChange={(aberto) => {
+          if (!aberto) setParcelaParaPagar(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pagar parcela</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirme o pagamento da parcela {parcelaParaPagar?.numero}. O valor será
+              debitado do saldo da empresa e registrado no histórico.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <dl className="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">
+            <LinhaResumo
+              rotulo="Parcela"
+              valor={parcelaParaPagar ? String(parcelaParaPagar.numero) : "—"}
+            />
+            <LinhaResumo
+              rotulo="Valor"
+              valor={
+                parcelaParaPagar ? formatCurrency(parcelaParaPagar.valor) : "—"
+              }
+              destaque
+            />
+          </dl>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => formPagamentoRef.current?.requestSubmit()}
+              disabled={pendentePagamento}
+            >
+              Pagar parcela
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <form ref={formQuitacaoRef} action={formActionQuitacao}>
+        <input type="hidden" name="emprestimoId" value={emprestimo.id} />
+      </form>
+      <AlertDialog open={dialogoQuitacao} onOpenChange={setDialogoQuitacao}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quitar empréstimo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todas as parcelas pendentes serão pagas agora com desconto por
+              quitação antecipada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <dl className="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">
+            <LinhaResumo
+              rotulo="Saldo devedor"
+              valor={formatCurrency(saldoDevedor)}
+            />
+            <LinhaResumo rotulo="Desconto" valor={formatCurrency(desconto)} />
+            <LinhaResumo
+              rotulo="Valor a pagar"
+              valor={formatCurrency(valorQuitacao)}
+              destaque
+            />
+          </dl>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => formQuitacaoRef.current?.requestSubmit()}
+              disabled={pendenteQuitacao}
+            >
+              Quitar empréstimo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </li>
+  );
+}
+
 function InvestimentosLista({
   investimentos,
+  taxaResgateAntecipado,
 }: {
   investimentos: InvestimentoView[];
+  taxaResgateAntecipado: number;
 }) {
   return (
     <Card>
@@ -672,8 +957,11 @@ function InvestimentosLista({
           Investimentos
         </h2>
         <CardDescription>
-          Aplicações ativas e resgatadas. O resgate credita principal + 1 mês de
-          rendimento.
+          Aplicações ativas e resgatadas. Resgates na mesma rodada não rendem e
+          perdem {formatarTaxa(taxaResgateAntecipado)}; após um mês, rendem{" "}
+          {formatarTaxa(
+            investimentos[0]?.taxaRendimentoMensal ?? 0,
+          )} ao mês.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -694,6 +982,7 @@ function InvestimentosLista({
               <InvestimentoLinha
                 key={investimento.id}
                 investimento={investimento}
+                taxaResgateAntecipado={taxaResgateAntecipado}
               />
             ))}
           </ul>
@@ -705,8 +994,10 @@ function InvestimentosLista({
 
 function InvestimentoLinha({
   investimento,
+  taxaResgateAntecipado,
 }: {
   investimento: InvestimentoView;
+  taxaResgateAntecipado: number;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -728,6 +1019,9 @@ function InvestimentoLinha({
   const resgatePrevisto = calcularValorResgate(
     investimento.valorAplicado,
     investimento.taxaRendimentoMensal,
+  );
+  const resgateAntecipado = arredondarValor(
+    investimento.valorAplicado * (1 - taxaResgateAntecipado),
   );
 
   function confirmar() {
@@ -759,6 +1053,10 @@ function InvestimentoLinha({
             {investimento.resgatadoPor ? ` por ${investimento.resgatadoPor}` : ""}
             {investimento.valorResgate !== null
               ? ` · ${formatCurrency(investimento.valorResgate)}`
+              : ""}
+            {investimento.taxaResgateAplicada !== null &&
+            investimento.taxaResgateAplicada > 0
+              ? ` · taxa de ${formatarTaxa(investimento.taxaResgateAplicada)}`
               : ""}
           </p>
         )}
@@ -808,8 +1106,9 @@ function InvestimentoLinha({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Confirmar resgate</AlertDialogTitle>
                   <AlertDialogDescription>
-                    A aplicação será encerrada e o valor, com rendimento de um mês,
-                    será creditado no saldo da empresa.
+                    Se o resgate ocorrer nesta mesma rodada, não há rendimento e
+                    incide a taxa de resgate antecipado. Se ocorrer após um mês,
+                    o valor volta com rendimento.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <dl className="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">
@@ -818,15 +1117,11 @@ function InvestimentoLinha({
                     valor={formatCurrency(investimento.valorAplicado)}
                   />
                   <LinhaResumo
-                    rotulo="Rendimento"
-                    valor={formatCurrency(
-                      arredondarValor(
-                        resgatePrevisto - investimento.valorAplicado,
-                      ),
-                    )}
+                    rotulo={`Nesta rodada (taxa de ${formatarTaxa(taxaResgateAntecipado)})`}
+                    valor={formatCurrency(resgateAntecipado)}
                   />
                   <LinhaResumo
-                    rotulo="Total a receber"
+                    rotulo="Após 1 mês (com rendimento)"
                     valor={formatCurrency(resgatePrevisto)}
                     destaque
                   />

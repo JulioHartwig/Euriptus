@@ -11,16 +11,20 @@ export function listRodadas() {
       fechadaPor: { select: { nome: true } },
       _count: { select: { transacoes: true } },
     },
-    orderBy: { numero: "desc" },
+    orderBy: [{ numero: "desc" }],
   });
+}
+
+export function findUltimaRodada() {
+  return prisma.rodada.findFirst({ orderBy: { numero: "desc" } });
 }
 
 export function getUltimoNumero() {
   return prisma.rodada.aggregate({ _max: { numero: true } });
 }
 
-export function criarRodada(numero: number, userId: string) {
+export function criarRodada(numero: number, userId: string, competencia: Date) {
   return prisma.rodada.create({
-    data: { numero, abertaPorUserId: userId },
+    data: { numero, competencia, abertaPorUserId: userId },
   });
 }

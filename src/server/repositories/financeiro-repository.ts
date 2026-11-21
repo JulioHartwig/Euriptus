@@ -31,7 +31,9 @@ const transacaoSelect = {
   tipo: true,
   descricao: true,
   valor: true,
+  quantidade: true,
   rodadaId: true,
+  rodada: { select: { numero: true, competencia: true } },
   criadoEm: true,
   criadoPor: {
     select: {

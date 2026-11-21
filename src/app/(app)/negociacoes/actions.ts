@@ -21,6 +21,9 @@ function revalidar() {
   revalidatePath("/painel");
   revalidatePath("/financeiro");
   revalidatePath("/mercado");
+  revalidatePath("/estoque");
+  revalidatePath("/historico");
+  revalidatePath("/alertas");
 }
 
 async function contexto() {

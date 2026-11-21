@@ -11,6 +11,7 @@ export const TRANSACAO_TIPOS: TransacaoTipo[] = [
   "EMPRESTIMO",
   "INVESTIMENTO",
   "RESGATE",
+  "PAGAMENTO_EMPRESTIMO",
 ];
 
 export const TRANSACAO_TIPO_LABEL: Record<TransacaoTipo, string> = {
@@ -22,6 +23,7 @@ export const TRANSACAO_TIPO_LABEL: Record<TransacaoTipo, string> = {
   EMPRESTIMO: "Empréstimo",
   INVESTIMENTO: "Investimento",
   RESGATE: "Resgate",
+  PAGAMENTO_EMPRESTIMO: "Pagamento de empréstimo",
 };
 
 /** Variante visual do Badge no extrato. */
@@ -37,6 +39,7 @@ export const TRANSACAO_TIPO_BADGE: Record<
   EMPRESTIMO: "accent",
   INVESTIMENTO: "accent",
   RESGATE: "accent",
+  PAGAMENTO_EMPRESTIMO: "secondary",
 };
 
 /**
@@ -52,6 +55,7 @@ export const TRANSACAO_SINAL: Record<TransacaoTipo, 1 | -1> = {
   EMPRESTIMO: 1,
   INVESTIMENTO: -1,
   RESGATE: 1,
+  PAGAMENTO_EMPRESTIMO: -1,
 };
 
 export function formatarValorTransacao(tipo: TransacaoTipo, valor: number) {

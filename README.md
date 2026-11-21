@@ -11,11 +11,12 @@ as negociações serão feitas por propostas formais (oferta → aceite).
 > **Nome provisório.** "Euriptus" é um placeholder e pode ser trocado sem impacto na
 > arquitetura.
 
-**Status:** iteração 10 concluída — autenticação, empresas, painel, financeiro, banco, mercado,
-negociações, rodadas, **painel do professor completo** e **eventos econômicos** (templates,
-disparo auditado e notícia automática), com **polimento/documentação**, **verificações automatizadas**
-(`lint`, `typecheck`, smoke tests) e preparação para **deploy Vercel + Neon**. Google OAuth
-permanece opcional/fora do escopo implementado.
+**Status:** iteração 11 concluída — autenticação, empresas, painel, financeiro, banco com
+parcelas/quitação/resgate, mercado com produção mensal e melhorias, estoque avaliado,
+histórico unificado, central de alertas, negociações, rodadas mensais, **painel do professor
+completo** e **eventos econômicos**, com **deploy Vercel + Neon** funcionando. Verificações
+automatizadas (`lint`, `typecheck`, smoke tests ampliados) e build de produção passam localmente.
+Google OAuth permanece opcional/fora do escopo implementado.
 
 ---
 
@@ -33,7 +34,7 @@ permanece opcional/fora do escopo implementado.
 - [Autenticação e segurança](#autenticação-e-segurança)
 - [Decisões de design](#decisões-de-design)
 - [Testes automatizados](#testes-automatizados)
-- [Testes manuais desta iteração](#testes-manuais-desta-iteração)
+- [Testes manuais](#testes-manuais)
 - [Deploy na Vercel + Neon](#deploy-na-vercel--neon)
 - [Próximas iterações](#próximas-iterações)
 - [Limitações conhecidas](#limitações-conhecidas)
@@ -71,14 +72,21 @@ A UI é 100% em português (pt-BR), responsiva e acessível (desktop, tablet e c
       aos módulos administrativos.
 - [x] `/financeiro` com resumo do período (receitas, despesas, impostos, salários e
       resultado), custos fixos ativos e extrato com tipo, valor e autor.
-- [x] `/banco` com taxas vigentes, limite de empréstimo (3× saldo), solicitação de
-      empréstimo com confirmação, aplicação e resgate de investimento com confirmação,
-      toasts de sucesso/erro, listas de contratos/aplicações e atualização do saldo.
-- [x] `/mercado` com catálogo de preço fixo por etapa da empresa, compra com confirmação,
-  débito de saldo, registro de despesa no extrato e atualização do estoque.
+- [x] `/banco` com taxas vigentes, limite de empréstimo (3× saldo), empréstimos parcelados
+      (até 12 parcelas) com pagamento individual, quitação com desconto de 5%, aplicação e
+      resgate com taxa de 5% na mesma rodada, simulações, toasts e listas de contratos.
+- [x] `/mercado` com catálogo categorizado (insumo, produto, melhoria), preço fixo por etapa,
+  compra com confirmação e feedback persistente (valor debitado, novo saldo e estoque),
+  melhorias de capacidade/marketing e registro de produção limitado à capacidade do mês.
+- [x] `/estoque` com quantidade, preço médio ponderado, valor contábil dos lotes e produção da rodada.
+- [x] `/historico` com linha do tempo unificada de transações e produção, incluindo rodada e autor.
+- [x] `/alertas` e sino no header, com pendências derivadas do estado atual (rodada, saldo,
+  parcelas vencidas, propostas, capacidade e estoque de produto).
 - [x] `/negociacoes` com propostas formais entre empresas (oferta → aceite/recusa/cancelamento),
-  transferência atômica de estoque e valores no aceite, registro de autoria e transações.
-- [x] `/professor/rodadas` para abertura e fechamento/processamento de rodadas (com histórico e autoria).
+  transferência atômica de estoque e dinheiro no aceite, valor contábil proporcional,
+  multiplicador de marketing na receita da vendedora, autoria e transações.
+- [x] `/professor/rodadas` para abertura e fechamento/processamento de rodadas mensais
+  (competência `MM/AAAA`), pagamento automático de parcelas vencidas no fechamento e histórico.
 - [x] `/professor/eventos` com templates pré-registrados, disparo de eventos pelo professor (com autoria e rodada atual, quando houver) e geração automática de notícia.
 - [x] `/professor/noticias` com CRUD, ativação/desativação e remoção de notícias.
 - [x] `/professor/parametros` com edição de parâmetros econômicos globais.
@@ -87,16 +95,19 @@ A UI é 100% em português (pt-BR), responsiva e acessível (desktop, tablet e c
 - [x] `/professor/usuarios` com CRUD de usuários (criação/redefinição de senha, vínculo com empresa e regras de perfil).
 - [x] `/professor/financeiro` com visão consolidada de saldos das empresas.
 - [x] `/professor/banco` com visão consolidada de empréstimos e investimentos ativos por empresa.
-- [x] Migrations incrementais (`init`, `noticias`, `financeiro`, `banco`, `mercado_catalogo`, `negociacoes`, `rodadas`, `eventos_economicos`) + seed idempotente.
+- [x] Migrations incrementais (`init`, `noticias`, `financeiro`, `banco`, `mercado_catalogo`,
+  `negociacoes`, `rodadas`, `eventos_economicos`, `melhorias_producao_parcelas`,
+  `quantidade_transacao`, `backfill_estoque_valor`) + seed idempotente.
 - [x] Seed com 1 professor, 4 empresas, 1 estudante por empresa, 3 notícias,
-      3 parâmetros econômicos, 2 custos fixos por empresa, 2 lançamentos por empresa e
-      8 itens de catálogo (2 por tipo de empresa).
+  5 parâmetros econômicos (incluindo desconto de quitação e taxa de resgate), 2 custos fixos
+  por empresa, 2 lançamentos por empresa e 21 itens de catálogo (insumos, produtos e melhorias).
 - [x] Lighthouse 100 em acessibilidade, boas práticas e SEO nas páginas auditadas
       (`/login`, `/painel`, `/professor`, `/mercado`).
 
-**Fora do escopo até aqui:** produção/transformação automática entre etapas, eventos econômicos
-(templates/disparo/efeitos), rendimento de investimentos por rodada além do resgate manual
-existente, Google OAuth (opcional), relatórios, gráficos e ranking, polimento e testes automatizados. Processamento de rodadas aplica regras básicas documentadas nesta iteração.
+**Fora do escopo:** efeitos econômicos automáticos complexos de eventos, transformação
+automática entre etapas, rendimento passivo de investimentos por rodada, Google OAuth
+(opcional), relatórios, gráficos e ranking, chat e troca/reembolso. O processamento de
+rodadas aplica as regras básicas documentadas neste README.
 
 ---
 
@@ -289,16 +300,19 @@ Regras gerais: **pooled** (`-pooler`) para o runtime do app; **direta** para mig
 
 ```text
 prisma/
-  schema.prisma            # User, Empresa, Noticia, Transacao, CustoFixo, ParametroEconomico, Emprestimo, Investimento, CatalogoItem, EstoqueItem, Proposta, Rodada, EventoTemplate, EventoAtivo
-  seed.ts                  # dados de demonstração (empresas, usuários, notícias, financeiro, catálogo)
-  migrations/              # SQL versionado (init, noticias, financeiro, banco, mercado_catalogo, negociacoes, rodadas, eventos_economicos)
+  schema.prisma            # User, Empresa, Noticia, Transacao, CustoFixo, ParametroEconomico, Emprestimo, ParcelaEmprestimo, Investimento, CatalogoItem, EstoqueItem, ProducaoRodada, Proposta, Rodada, EventoTemplate, EventoAtivo
+  seed.ts                  # dados de demonstração (empresas, usuários, notícias, parâmetros, financeiro, catálogo com produtos e melhorias)
+  migrations/              # SQL versionado (11 migrations, incluindo parcelas, capacidade e estoque avaliado)
 src/
   app/
     (app)/                 # área autenticada (layout com header + sidebar)
       painel/              # indicadores da empresa + notícias
       financeiro/          # resumo, custos fixos e extrato
-      banco/               # empréstimos, investimentos, resgates e Server Actions
-      mercado/             # catálogo, compras e estoque
+      banco/               # empréstimos parcelados, quitação, investimentos, resgates e Server Actions
+      mercado/             # catálogo categorizado, compras, melhorias e produção mensal
+      estoque/             # quantidades, preço médio e valor contábil por item
+      historico/           # linha do tempo financeira + produção
+      alertas/             # central de alertas derivada do estado atual
       negociacoes/         # propostas, aceite/recusa/cancelamento e Server Actions
       professor/
         eventos/           # templates e disparo de eventos econômicos
@@ -317,7 +331,7 @@ src/
     globals.css
   components/
     ui/                    # primitivas shadcn/ui (inclui alert-dialog e sonner)
-    app-shell.tsx          # header, sidebar, drawer mobile, logout
+    app-shell.tsx          # header com sino de alertas, sidebar, drawer mobile, logout
     noticia-lista.tsx      # feed de notícias reutilizado por aluno e professor
     ...
   lib/
@@ -326,13 +340,13 @@ src/
     empresa.ts             # rótulos e ordem da cadeia
     noticia.ts             # rótulos e badge por tipo de notícia
     financeiro.ts          # rótulos, badges e sinal por tipo de transação
-    banco.ts               # limites, cálculos, rótulos e estado das ações do banco
-    mercado.ts             # cálculos e estado das ações do mercado
+    banco.ts               # limites, parcelas, desconto, resgate, rótulos e estado das ações
+    mercado.ts             # categorias, cálculos e estado das ações do mercado
     negociacao.ts          # rótulos/status e estado das ações de negociação
-    rodada.ts              # estado das ações de rodada
+    rodada.ts              # competência mensal, formatação e estado das ações de rodada
     validations/auth.ts    # schema Zod do login
-    validations/banco.ts   # schemas Zod de empréstimo, aplicação e resgate
-    validations/mercado.ts # schema Zod de compra
+    validations/banco.ts   # schemas Zod de empréstimo parcelado, parcela, quitação, aplicação e resgate
+    validations/mercado.ts # schemas Zod de compra e produção
     validations/negociacao.ts # schemas Zod de proposta/resposta
     validations/professor.ts # schemas Zod de gestão (notícias, parâmetros, catálogo, empresas, usuários, eventos)
   server/
@@ -377,14 +391,16 @@ formulário de login, shell responsivo e primitivas Radix.
 
 ### `Empresa`
 
-| Campo       | Tipo                                                      | Observações      |
-| ----------- | --------------------------------------------------------- | ---------------- |
-| `id`        | `String` (cuid)                                           | PK               |
-| `nome`      | `String` único                                            |                  |
-| `tipo`      | `PRODUTOR / LOGISTICA / BENEFICIAMENTO / VENDA`           | etapa da cadeia  |
-| `saldo`     | `Decimal(14,2)`                                           | default `0`      |
-| `createdAt` | `DateTime`                                                |                  |
-| `updatedAt` | `DateTime`                                                |                  |
+| Campo                  | Tipo                                                      | Observações                                  |
+| ---------------------- | --------------------------------------------------------- | -------------------------------------------- |
+| `id`                   | `String` (cuid)                                           | PK                                           |
+| `nome`                 | `String` único                                            |                                              |
+| `tipo`                 | `PRODUTOR / LOGISTICA / BENEFICIAMENTO / VENDA`           | etapa da cadeia                              |
+| `saldo`                | `Decimal(14,2)`                                           | default `0`                                  |
+| `capacidadeProducao`   | `Int`                                                     | soma das melhorias compradas                 |
+| `multiplicadorMarketing` | `Decimal(14,4)`                                         | multiplicador da receita de vendas           |
+| `createdAt`            | `DateTime`                                                |                                              |
+| `updatedAt`            | `DateTime`                                                |                                              |
 
 Relação: `Empresa 1—N User`. `onDelete: SetNull`.
 
@@ -409,9 +425,10 @@ Não há campo único em `titulo`; o seed evita duplicatas procurando pelo títu
 | ------------------ | -------------------------------------------------------------------- | --------------------------------------------- |
 | `id`               | `String` (cuid)                                                      | PK                                            |
 | `empresaId`        | `String`                                                             | FK para `Empresa` (`onDelete: Cascade`)       |
-| `tipo`             | `RECEITA / DESPESA / IMPOSTO / SALARIO / JUROS / EMPRESTIMO / INVESTIMENTO / RESGATE` | define entrada ou saída do caixa |
+| `tipo`             | `RECEITA / DESPESA / IMPOSTO / SALARIO / JUROS / EMPRESTIMO / INVESTIMENTO / RESGATE / PAGAMENTO_EMPRESTIMO` | define entrada ou saída do caixa |
 | `descricao`        | `String`                                                             | texto exibido no extrato                      |
 | `valor`            | `Decimal(14,2)`                                                      | sempre positivo; o sinal vem do `tipo`        |
+| `quantidade`       | `Int?`                                                               | preenchida em compras/vendas                  |
 | `rodadaId`         | `String?`                                                            | FK opcional para `Rodada` (`onDelete: SetNull`) |
 | `criadoEm`         | `DateTime`                                                           | default `now()`                               |
 | `criadoPorUserId`  | `String`                                                             | FK para `User`; atende à auditoria            |
@@ -443,10 +460,24 @@ Não há campo único em `titulo`; o seed evita duplicatas procurando pelo títu
 | `empresaId`        | `String`               | FK para `Empresa` (`onDelete: Cascade`)                   |
 | `valorPrincipal`   | `Decimal(14,2)`        | valor creditado no saldo                                   |
 | `taxaJurosMensal`  | `Decimal(14,4)`        | snapshot do `JUROS_MENSAL` no momento da contratação      |
-| `totalDevido`      | `Decimal(14,2)`        | principal × (1 + taxa) para 1 mês                         |
-| `status`           | `ATIVO / QUITADO`      | quitação automática na Etapa 7                            |
+| `totalDevido`      | `Decimal(14,2)`        | principal × (1 + taxa × parcelas)                         |
+| `status`           | `ATIVO / QUITADO`      | quitação manual com desconto ou por parcelas/rodada       |
 | `criadoEm`         | `DateTime`             |                                                           |
 | `criadoPorUserId`  | `String`               | FK para `User`; atende à auditoria                        |
+
+### `ParcelaEmprestimo`
+
+| Campo               | Tipo                   | Observações                                             |
+| ------------------- | ---------------------- | ------------------------------------------------------- |
+| `id`                | `String` (cuid)        | PK                                                      |
+| `emprestimoId`      | `String`               | FK para `Emprestimo` (`onDelete: Cascade`)              |
+| `numero`            | `Int`                  | sequência da parcela                                    |
+| `valor`             | `Decimal(14,2)`        | valor da parcela                                        |
+| `vencimento`        | `DateTime`             | competência mensal de vencimento                        |
+| `status`            | `PENDENTE / PAGA`      | controle de pagamento                                   |
+| `valorPago`         | `Decimal(14,2)?`       | valor efetivamente pago (menor em caso de desconto)     |
+| `pagaEm`            | `DateTime?`            | preenchida no pagamento                                 |
+| `pagaPorUserId`     | `String?`              | FK para `User`; autor do pagamento                      |
 
 ### `Investimento`
 
@@ -456,7 +487,9 @@ Não há campo único em `titulo`; o seed evita duplicatas procurando pelo títu
 | `empresaId`             | `String`                  | FK para `Empresa` (`onDelete: Cascade`)                |
 | `valorAplicado`         | `Decimal(14,2)`           | debitado do saldo no ato da aplicação                  |
 | `taxaRendimentoMensal`  | `Decimal(14,4)`           | snapshot da taxa (JUROS_MENSAL ÷ 2)                    |
-| `valorResgate`          | `Decimal(14,2)?`          | principal + 1 mês de rendimento no resgate             |
+| `valorResgate`          | `Decimal(14,2)?`          | valor creditado no resgate                              |
+| `rodadaCriacaoId`       | `String?`                 | FK da rodada da aplicação; define resgate antecipado    |
+| `taxaResgateAplicada`   | `Decimal(14,4)?`          | snapshot da taxa cobrada no resgate                     |
 | `status`                | `ATIVO / RESGATADO`       |                                                        |
 | `criadoEm`              | `DateTime`                |                                                        |
 | `resgatadoEm`           | `DateTime?`               |                                                        |
@@ -473,6 +506,9 @@ Não há campo único em `titulo`; o seed evita duplicatas procurando pelo títu
 | `unidade`     | `String`         | ex.: lote, saco, pacote                                   |
 | `preco`       | `Decimal(14,2)`  | preço fixo por unidade                                   |
 | `empresaTipo` | `EmpresaTipo?`   | se nulo, disponível a todas; senão, restrito ao tipo     |
+| `categoria`   | `INSUMO / PRODUTO / MELHORIA` | default `INSUMO`                               |
+| `aumentoCapacidade` | `Int`     | ganho mensal quando a categoria é `MELHORIA`              |
+| `aumentoMarketing` | `Decimal(14,4)` | ganho de receita nas vendas (ex.: `0,10` = 10%)           |
 | `ativo`       | `Boolean`        | default `true`                                           |
 
 ### `EstoqueItem`
@@ -483,9 +519,24 @@ Não há campo único em `titulo`; o seed evita duplicatas procurando pelo títu
 | `empresaId`     | `String`        | FK para `Empresa` (`onDelete: Cascade`)               |
 | `catalogoItemId`| `String`        | FK para `CatalogoItem` (`onDelete: Cascade`)          |
 | `quantidade`    | `Int`           | quantidade agregada do item                            |
-| `atualizadoEm`  | `DateTime`      | atualizado a cada compra                              |
+| `valorTotal`    | `Decimal(14,2)` | valor contábil do lote (base do preço médio)            |
+| `atualizadoEm`  | `DateTime`      | atualizado a cada compra/produção/transferência         |
 
-Relação única por (`empresaId`, `catalogoItemId`): compras incrementam o mesmo registro.
+Relação única por (`empresaId`, `catalogoItemId`): compras e produção incrementam o mesmo
+registro, com valor médio ponderado. Negociações transferem o valor proporcional ao destinatário.
+
+### `ProducaoRodada`
+
+| Campo                 | Tipo              | Observações                                              |
+| --------------------- | ----------------- | -------------------------------------------------------- |
+| `id`                  | `String` (cuid)   | PK                                                       |
+| `empresaId`           | `String`          | FK para `Empresa` (`onDelete: Cascade`)                  |
+| `rodadaId`            | `String`          | FK para `Rodada` (competência mensal)                    |
+| `catalogoItemId`      | `String`          | FK para o produto/serviço produzido                      |
+| `quantidade`          | `Int`             | unidades produzidas                                      |
+| `capacidadeAplicada`  | `Int`             | capacidade total da empresa no momento                   |
+| `criadoEm`            | `DateTime`        |                                                          |
+| `criadoPorUserId`     | `String`          | FK para `User`; autor do registro                        |
 
 ### `Proposta`
 
@@ -510,6 +561,7 @@ Relação única por (`empresaId`, `catalogoItemId`): compras incrementam o mesm
 | ------------------- | ----------------- | -------------------------------------------------------- |
 | `id`                | `String` (cuid)   | PK                                                       |
 | `numero`            | `Int`             | único, incremental                                       |
+| `competencia`       | `DateTime?`       | primeiro dia do mês (`MM/AAAA` na UI)                    |
 | `status`            | `ABERTA/FECHADA`  | apenas uma rodada aberta por vez                         |
 | `abertaEm`          | `DateTime`        |                                                          |
 | `abertaPorUserId`   | `String`          | FK para `User` (professor)                               |
@@ -540,9 +592,9 @@ Relação única por (`empresaId`, `catalogoItemId`): compras incrementam o mesm
 | `disparadoEm`        | `DateTime`      |                                                          |
 | `disparadoPorUserId` | `String`        | FK para `User` (professor; autoria do disparo)           |
 
-`Emprestimo`/`Investimento` (Etapa 4), `CatalogoItem`/`EstoqueItem` (Etapa 5), `Proposta`
-(Etapa 6), `Rodada` (Etapa 7) e `EventoTemplate`/`EventoAtivo` (Etapa 9) já existem. A base
-atual permite evoluir regras e novos efeitos sem quebrar contratos:
+Todas as entidades de negócio listadas acima já existem, incluindo `ParcelaEmprestimo`,
+`ProducaoRodada` e `Transacao.quantidade`, adicionadas na iteração 11. A base permite evoluir
+regras e novos efeitos sem quebrar contratos:
 
 - ids `cuid` em todas as entidades;
 - enums nomeados para papéis, tipos de empresa, tipos de notícia e tipos de transação;
@@ -747,18 +799,48 @@ páginas, middleware ou guards.
     correspondente no painel. Como simplificação, o disparo não aplica mutações econômicas
     automáticas complexas em saldos/estoques/preços; ajustes manuais via parâmetros ou catálogo
     permanecem possíveis.
+46. **Empréstimos parcelados e quitação com desconto (iteração 11).** O contrato registrou prazo
+    de até 12 meses, juros por parcela e uma `ParcelaEmprestimo` por mês, com autoria do
+    pagamento. A quitação antecipada usa `DESCONTO_QUITACAO` (5% no seed); pagar parcela e quitar
+    são operações atômicas com trava de status/saldo.
+47. **Resgate na mesma rodada não rende.** `Investimento.rodadaCriacaoId` identifica o mês da
+    aplicação. Se o resgate ocorrer na mesma competência, não há rendimento e é cobrada a taxa
+    `TAXA_RESGATE_ANTECIPADO` (5% no seed). Em competência posterior, rende a taxa gravada no
+    contrato. A UI mostra as duas simulações antes de confirmar.
+48. **Rodada = competência mensal.** Cada abertura calcula o próximo mês a partir da última
+    rodada (`proximaCompetencia`) e exibe `MM/AAAA`. No fechamento, são pagas automaticamente as
+    parcelas vencidas no mês quando há saldo, além dos custos/salários/impostos já existentes.
+49. **Capacidade mensal por tipo de empresa.** Produtor 100, Logística 60, Beneficiamento 80 e
+    Venda 70 unidades por mês, somadas a `Empresa.capacidadeProducao`. A produção é registrada
+    por `ProducaoRodada`, consome essa capacidade, gera estoque e é auditada.
+50. **Estoque com valor contábil.** `EstoqueItem.valorTotal` acompanha a quantidade; compras e
+    produção usam média ponderada por incremento de valor. A vendedora transfere ao comprador o
+    valor proporcional à quantidade negociada, mantendo o custo contábil ao longo da cadeia.
+51. **Marketing afeta receita, não custo.** Melhorias da empresa de venda aumentam
+    `multiplicadorMarketing`; no aceite da proposta, a receita creditada à vendedora é
+    `valorTotal × multiplicador`, enquanto o comprador paga exatamente o valor negociado.
+52. **Alertas calculados, não persistidos.** `/alertas` e o sino do header derivam avisos do
+    estado atual do banco (rodada aberta, saldo baixo, parcelas vencidas, propostas pendentes,
+    capacidade esgotada e falta de produto em estoque). Não há modelo `Alerta`, nem sino com
+    dropdown: o ícone é um link direto para a central.
+53. **Histórico unificado e `Transacao.quantidade`.** `/historico` cruza lançamentos financeiros
+    e registros de produção em uma linha do tempo com rodada e autor. A coluna `quantidade` é
+    opcional e preenchida em compras/vendas, sem alterar a regra de `valor` sempre positivo.
 
 ---
 
 ## Testes automatizados
 
-- `npm run test:smoke`: executa `scripts/smoke-tests.ts` (via `tsx`) cobrindo regras/utilitários e validações críticas (ex.: cálculos do banco, utilitários e schema de negociação).
+- `npm run test:smoke`: executa `scripts/smoke-tests.ts` (via `tsx`) cobrindo regras puras e
+  validações críticas: arredondamento, empréstimos parcelados, quitação, resgate antecipado,
+  competência mensal, capacidade-base, sinal das transações, total de compra e schemas de
+  proposta, compra, empréstimo e catálogo com melhorias.
 - `npm test`: executa `lint` + `typecheck` + `test:smoke` como verificação automatizada.
 - `npm run build`: verificação adicional de integração/compilação para produção (inclui `prisma generate`).
 
 > Observação: não há suíte E2E completa nem testes de integração com banco nesta etapa; os fluxos principais permanecem cobertos por testes manuais documentados abaixo.
 
-## Testes manuais desta iteração
+## Testes manuais
 
 Pré-requisito: banco migrado, seed aplicado e `npm run dev` rodando.
 
@@ -984,6 +1066,54 @@ Pré-requisito: banco migrado, seed aplicado e `npm run dev` rodando.
 7. Acesse `/professor/eventos` como estudante.
 8. **Esperado:** acesso bloqueado/redirecionado pelo guard de professor.
 
+### 22. Banco — parcelas, quitação e resgate antecipado
+
+1. Entre como `produtor@euriptus.com`, abra `/banco` e contrate R$ 1.200,00 em 3 parcelas.
+2. **Esperado:** 3 parcelas listadas com vencimentos mensais e valor por parcela; total devido
+   reflete juros de 3 meses.
+3. Pague a parcela 1.
+4. **Esperado:** parcela marcada como paga, autor registrado e lançamento em `/historico`.
+5. Use **Quitar com desconto** no contrato restante.
+6. **Esperado:** quitação com 5% de desconto, saldo debitado pelo valor com desconto e contrato
+   marcado como quitado.
+7. Aplique R$ 500,00 e resgate imediatamente, na mesma rodada aberta.
+8. **Esperado:** resgate sem rendimento e com 5% de taxa; a simulação anterior mostra o mesmo
+   valor. Após fechar e abrir outra rodada, o resgate de nova aplicação deve render a taxa gravada.
+
+### 23. Mercado — produção, capacidade e melhorias
+
+1. Como professor, abra uma rodada. Como produtor, acesse `/mercado`.
+2. **Esperado:** capacidade `0/100`, produto **Café em grãos** disponível e 100 unidades livres.
+3. Registre produção de 30 sacas.
+4. **Esperado:** capacidade `30/100`; estoque do produto com valor contábil; alerta de produção
+   aparece em `/historico` e `/estoque`.
+5. Compre **Ampliação de área** (+30 un./mês).
+6. **Esperado:** capacidade total sobe para 130 e o saldo é debitado com feedback persistente.
+7. Tente produzir acima do disponível.
+8. **Esperado:** botão bloqueado/erro informativo, sem alteração de estoque ou capacidade.
+
+### 24. Estoque, histórico e alertas
+
+1. Entre como `logistica@euriptus.com` e abra `/estoque`.
+2. **Esperado:** quantidade, preço médio e valor total por item; seção de produção da rodada.
+3. Abra `/historico`.
+4. **Esperado:** linha do tempo com transações e produção, incluindo rodada `MM/AAAA`, quantidade
+   e autor de cada registro.
+5. Abra `/alertas` e observe o sino no header.
+6. **Esperado:** alertas coerentes com o estado (sem rodada, saldo baixo, parcelas vencidas,
+   propostas pendentes, capacidade esgotada e/ou sem produto em estoque); o contador do sino
+   acompanha a quantidade e o ícone leva à central.
+
+### 25. Catálogo categorizado e negociação com marketing
+
+1. Como professor, abra `/professor/catalogo` e crie uma melhoria com categoria **Melhoria**,
+   aumento de capacidade e aumento de marketing `0,10`.
+2. **Esperado:** item aparece no Mercado da etapa correta com os efeitos descritos.
+3. Como venda, aceite uma proposta de café embalado com essa melhoria aplicada.
+4. **Esperado:** saldo creditado da vendedora é 10% maior que o valor pago pelo comprador;
+   transações de compra e venda usam os respectivos valores; estoque e `/historico` refletem a
+   transferência com autor e rodada.
+
 ---
 
 ## Deploy na Vercel + Neon
@@ -1036,6 +1166,11 @@ Depois, remova `ALLOW_PROD_SEED` e `SEED_PASSWORD` do ambiente. **Não** use
    | `NEXTAUTH_SECRET`       | segredo forte (`openssl rand -base64 32`)     |
    | `SHOW_DEMO_CREDENTIALS` | omitir (produção oculta as contas demo)       |
 
+   > **Importante:** ao colar os valores na Vercel, **não inclua as aspas** que aparecem no
+   > `.env` local. Valores como `"postgresql://..."` ou `"https://..."` são inválidos fora de
+   > um arquivo `.env` e causam erro genérico de login. O valor deve começar diretamente em
+   > `postgresql://` ou `https://`.
+
 4. Build command: `npm run build` (já inclui `prisma generate`). O `postinstall` também
    gera o client.
 5. Faça o deploy.
@@ -1045,19 +1180,34 @@ Depois, remova `ALLOW_PROD_SEED` e `SEED_PASSWORD` do ambiente. **Não** use
 **Preview deployments:** `NEXTAUTH_URL` precisa corresponder à URL de cada ambiente. Para
 múltiplos previews, configure a variável por ambiente na Vercel.
 
-**Estado de preparação (Etapa 10):** `npm test` e `npm run build` passam localmente; migrations versionadas e scripts de deploy (`db:deploy`) estão prontos para execução contra Neon antes/durante o deploy. O deploy efetivo depende de credenciais/ambiente Vercel+Neon externos a este workspace.
+### 4. Erros comuns na Vercel
+
+| Sintoma | Causa provável | Correção |
+| ------- | -------------- | -------- |
+| `500 MIDDLEWARE_INVOCATION_FAILED` | `NEXTAUTH_SECRET` ausente/inválido no ambiente Production; o middleware `withAuth` falha ao ler o JWT. | Configure `NEXTAUTH_SECRET` para **Production**, sem aspas, e faça redeploy. |
+| “Não foi possível entrar agora. Tente novamente em instantes.” | Erro de configuração do NextAuth/CSRF/banco, não credenciais inválidas. | Confira `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `DATABASE_URL` (pooled) e `DIRECT_URL` (direta), sem aspas. |
+| “E-mail ou senha inválidos.” | Usuário/senha incorretos ou seed não aplicado no banco usado pelo deploy. | Confira as credenciais e se o seed foi rodado contra o mesmo Neon. |
+
+> Ao colar valores na Vercel, **nunca inclua as aspas** presentes no `.env`. Use
+> `vercel env ls` para conferir nomes/ambientes sem revelar valores.
+
+**Estado atual (iteração 11):** `npm test` e `npm run build` passam localmente; as 11 migrations
+foram aplicadas no Neon e o seed foi reexecutado com os novos parâmetros/catálogo. Após merge das
+alterações, faça redeploy na Vercel para publicar as novas rotas e regras.
 
 ---
 
 ## Próximas iterações
 
-O plano de 10 etapas definido foi concluído (com simplificações documentadas e contratos preservados).
+O plano de 10 etapas foi concluído e a iteração 11 adicionou financiamento parcelado, produção
+mensal, capacidade/melhorias, estoque avaliado, histórico e alertas (com contratos preservados).
 
 **Possíveis evoluções futuras (opcionais):**
 - Google OAuth e fluxos avançados de autenticação/conta (recuperação, convites, rate limiting).
 - Testes automatizados mais amplos (integração/E2E com banco e fluxos completos).
-- Efeitos econômicos automáticos mais ricos para eventos, regras de equilíbrio e produção/transformação entre etapas.
-- Relatórios, gráficos, ranking e melhorias adicionais de UX/acessibilidade.
+- Efeitos econômicos automáticos mais ricos para eventos e regras de equilíbrio.
+- Transformação automática entre etapas com consumo de insumos e cálculo de custo de produção.
+- Relatórios, gráficos, ranking, exportação e melhorias adicionais de UX/acessibilidade.
 
 ---
 
@@ -1075,19 +1225,18 @@ O plano de 10 etapas definido foi concluído (com simplificações documentadas 
 - No painel, **Rodada atual** reflete a rodada aberta (ou a última fechada); **Dívida total** e
   **Estoque total** refletem dados reais.
 - Compras do mercado usam catálogo de preço fixo por etapa, debitam saldo e geram estoque/
-  despesa; não há transformação/produção entre etapas, consumo automático nem troca/reembolso.
-  Negociações entre empresas ocorrem por propostas formais (oferta → aceite) com transferência
-  de itens/valores, mas sem reservas de estoque na criação e sem devoluções.
-- O processamento de rodada aplica regras básicas (custos fixos, salário mínimo, imposto sobre
-  receitas da rodada e quitação automática de empréstimos ativos quando há saldo). Débitos
-  automáticos podem deixar saldo negativo; investimentos não rendem automaticamente por rodada
-  (resgate manual mantém a simplificação anterior). Regras avançadas/equilíbrio evoluem nas
-  próximas etapas.
-- Empréstimos e investimentos não são quitados/rendidos automaticamente por rodada (Etapa
-  7): o resgate paga principal + 1 mês de rendimento de forma imediata e, até haver
-  rodadas, repetir aplicar→resgatar produz 1% por ciclo (simplificação documentada).
+  despesa com valor médio ponderado. A produção mensal é manual (registrada pelo estudante)
+  e limitada pela capacidade; não há transformação automática entre etapas nem consumo de
+  insumos. Negociações ocorrem por propostas formais (oferta → aceite) com transferência de
+  itens/dinheiro, sem reserva na criação, sem devolução e sem chat.
+- O processamento de rodada aplica custos fixos, salário mínimo, imposto sobre receitas da
+  rodada e paga parcelas vencidas no mês quando há saldo. Débitos automáticos podem deixar
+  saldo negativo; investimentos não rendem passivamente por rodada — o rendimento só é
+  realizado no resgate manual.
+- Resgate na mesma competência da aplicação não rende e cobra 5% de taxa; em competência
+  posterior rende a taxa gravada no contrato. Não há juros compostos nem capitalização automática.
 - O limite de empréstimo (3× saldo atual) não considera dívidas existentes; é a regra
-  literal desta etapa.
+  literal do produto. A quitação antecipada concede 5% de desconto sobre o saldo devedor.
 - O resultado do Financeiro é operacional (receitas − despesas − impostos − salários);
   movimentos de banco e compras aparecem no extrato, mas o cálculo do resumo permanece operacional.
 - O extrato e o saldo não são derivados um do outro nesta versão: os lançamentos do seed

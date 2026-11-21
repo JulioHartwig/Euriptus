@@ -42,6 +42,7 @@ enum TransacaoTipo {
   EMPRESTIMO
   INVESTIMENTO
   RESGATE
+  PAGAMENTO_EMPRESTIMO
 }
 
 enum StatusEmprestimo {
@@ -49,9 +50,20 @@ enum StatusEmprestimo {
   QUITADO
 }
 
+enum StatusParcela {
+  PENDENTE
+  PAGA
+}
+
 enum StatusInvestimento {
   ATIVO
   RESGATADO
+}
+
+enum CatalogoItemCategoria {
+  INSUMO
+  PRODUTO
+  MELHORIA
 }
 
 enum PropostaStatus {
@@ -81,14 +93,16 @@ model User {
 
   transacoes Transacao[] @relation("TransacaoCriadaPor")
 
-  emprestimos            Emprestimo[]   @relation("EmprestimoCriadoPor")
-  investimentosCriados   Investimento[] @relation("InvestimentoCriadoPor")
-  investimentosResgatados Investimento[] @relation("InvestimentoResgatadoPor")
-  propostasCriadas       Proposta[]     @relation("PropostaCriadaPor")
-  propostasRespondidas   Proposta[]     @relation("PropostaRespondidaPor")
-  rodadasAbertas         Rodada[]       @relation("RodadaAbertaPor")
-  rodadasFechadas        Rodada[]       @relation("RodadaFechadaPor")
-  eventosDisparados      EventoAtivo[]  @relation("EventoDisparadoPor")
+  emprestimos            Emprestimo[]        @relation("EmprestimoCriadoPor")
+  parcelasPagas          ParcelaEmprestimo[] @relation("ParcelaPagaPor")
+  investimentosCriados   Investimento[]      @relation("InvestimentoCriadoPor")
+  investimentosResgatados Investimento[]      @relation("InvestimentoResgatadoPor")
+  propostasCriadas       Proposta[]          @relation("PropostaCriadaPor")
+  propostasRespondidas   Proposta[]          @relation("PropostaRespondidaPor")
+  rodadasAbertas         Rodada[]            @relation("RodadaAbertaPor")
+  rodadasFechadas        Rodada[]            @relation("RodadaFechadaPor")
+  eventosDisparados      EventoAtivo[]       @relation("EventoDisparadoPor")
+  producoes              ProducaoRodada[]    @relation("ProducaoCriadaPor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -105,6 +119,13 @@ model Empresa {
   // Valores monetários sempre em Decimal no banco; a UI formata em pt-BR.
   saldo Decimal @default(0) @db.Decimal(14, 2)
 
+  /// Limite de produção/prestação de serviço por mês (rodada).
+  /// Aumenta quando a empresa compra um item de catálogo do tipo MELHORIA.
+  capacidadeProducao Int @default(0)
+
+  /// Multiplicador aplicado às receitas da empresa de venda no aceite de propostas.
+  multiplicadorMarketing Decimal @default(1) @db.Decimal(14, 4)
+
   usuarios User[]
 
   transacoes    Transacao[]
@@ -112,6 +133,7 @@ model Empresa {
   emprestimos   Emprestimo[]
   investimentos Investimento[]
   estoque       EstoqueItem[]
+  producoes     ProducaoRodada[]
   propostasEnviadas  Proposta[] @relation("PropostaOrigem")
   propostasRecebidas Proposta[] @relation("PropostaDestino")
 
@@ -150,6 +172,8 @@ model Transacao {
   tipo      TransacaoTipo
   descricao String
   valor     Decimal        @db.Decimal(14, 2)
+  /// Quantidade de itens envolvidos, quando aplicável (compras e vendas).
+  quantidade Int?
 
   /// Preenchido quando a transação pertence a uma rodada.
   rodadaId String?
@@ -201,6 +225,16 @@ model Emprestimo {
   taxaJurosMensal Decimal @db.Decimal(14, 4)
   totalDevido     Decimal @db.Decimal(14, 2)
 
+  /// Parcelamento escolhido na contratação (1 = pagamento único).
+  numeroParcelas Int     @default(1)
+  valorParcela   Decimal @default(0) @db.Decimal(14, 2)
+  /// Desconto concedido quando o contrato é quitado antes do vencimento.
+  descontoAplicado Decimal @default(0) @db.Decimal(14, 2)
+  quitadoEm        DateTime?
+
+  rodadaCriacaoId String?
+  rodadaCriacao   Rodada? @relation("EmprestimoRodadaCriacao", fields: [rodadaCriacaoId], references: [id], onDelete: SetNull)
+
   status StatusEmprestimo @default(ATIVO)
 
   criadoEm DateTime @default(now())
@@ -208,8 +242,33 @@ model Emprestimo {
   criadoPorUserId String
   criadoPor       User   @relation("EmprestimoCriadoPor", fields: [criadoPorUserId], references: [id])
 
+  parcelas ParcelaEmprestimo[]
+
   @@index([empresaId, status])
   @@index([empresaId, criadoEm])
+  @@index([rodadaCriacaoId])
+}
+
+/// Parcela mensal de um empréstimo. O vencimento acompanha a rodada (mês).
+model ParcelaEmprestimo {
+  id           String     @id @default(cuid())
+  emprestimoId String
+  emprestimo   Emprestimo @relation(fields: [emprestimoId], references: [id], onDelete: Cascade)
+
+  numero     Int
+  valor      Decimal  @db.Decimal(14, 2)
+  vencimento DateTime
+
+  status    StatusParcela @default(PENDENTE)
+  /// Valor efetivamente pago (pode ser menor que `valor` em caso de desconto).
+  valorPago Decimal?      @db.Decimal(14, 2)
+  pagaEm    DateTime?
+
+  pagaPorUserId String?
+  pagaPor       User?   @relation("ParcelaPagaPor", fields: [pagaPorUserId], references: [id])
+
+  @@unique([emprestimoId, numero])
+  @@index([status, vencimento])
 }
 
 /// Aplicação financeira da empresa.
@@ -225,6 +284,12 @@ model Investimento {
   valorAplicado         Decimal @db.Decimal(14, 2)
   taxaRendimentoMensal  Decimal @db.Decimal(14, 4)
   valorResgate           Decimal? @db.Decimal(14, 2)
+
+  /// Rodada/mês da aplicação. Resgates na mesma competência não rendem e
+  /// sofrem a taxa de resgate antecipado.
+  rodadaCriacaoId String?
+  rodadaCriacao   Rodada? @relation("InvestimentoRodadaCriacao", fields: [rodadaCriacaoId], references: [id], onDelete: SetNull)
+  taxaResgateAplicada Decimal? @db.Decimal(14, 4)
 
   status StatusInvestimento @default(ATIVO)
 
@@ -252,10 +317,18 @@ model CatalogoItem {
   empresaTipo EmpresaTipo?
   ativo       Boolean      @default(true)
 
+  categoria CatalogoItemCategoria @default(INSUMO)
+  /// Ganho de capacidade mensal quando o item é uma MELHORIA.
+  aumentoCapacidade Int @default(0)
+  /// Ganho multiplicador de receita para a empresa de venda (ex.: 0,10 = +10%).
+  aumentoMarketing Decimal @default(0) @db.Decimal(14, 4)
+
   estoque   EstoqueItem[]
   propostas Proposta[]
+  producoes ProducaoRodada[]
 
   @@index([ativo, empresaTipo])
+  @@index([categoria])
 }
 
 /// Estoque da empresa por item de catálogo (quantidades agregadas).
@@ -266,6 +339,8 @@ model EstoqueItem {
   catalogoItemId String
   catalogoItem   CatalogoItem @relation(fields: [catalogoItemId], references: [id], onDelete: Cascade)
   quantidade     Int          @default(0)
+  /// Valor contábil do lote. Usado para calcular o preço médio ponderado.
+  valorTotal     Decimal      @default(0) @db.Decimal(14, 2)
   atualizadoEm   DateTime     @updatedAt
 
   @@unique([empresaId, catalogoItemId])
@@ -306,6 +381,8 @@ model Proposta {
 model Rodada {
   id     String       @id @default(cuid())
   numero Int          @unique
+  /// Primeiro dia do mês representado pela rodada (competência mensal).
+  competencia DateTime? @unique
   status RodadaStatus @default(ABERTA)
 
   abertaEm DateTime @default(now())
@@ -316,10 +393,34 @@ model Rodada {
   fechadaPorUserId String?
   fechadaPor       User?    @relation("RodadaFechadaPor", fields: [fechadaPorUserId], references: [id])
 
-  transacoes Transacao[]
-  eventos     EventoAtivo[]
+  transacoes     Transacao[]
+  eventos        EventoAtivo[]
+  emprestimos    Emprestimo[]    @relation("EmprestimoRodadaCriacao")
+  investimentos  Investimento[]  @relation("InvestimentoRodadaCriacao")
+  producoes      ProducaoRodada[]
 
   @@index([status])
+  @@index([competencia])
+}
+
+/// Produção/prestação de serviço registrada por empresa em cada mês (rodada).
+model ProducaoRodada {
+  id             String       @id @default(cuid())
+  empresaId      String
+  empresa        Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  rodadaId       String
+  rodada         Rodada       @relation(fields: [rodadaId], references: [id], onDelete: Cascade)
+  catalogoItemId String
+  catalogoItem   CatalogoItem @relation(fields: [catalogoItemId], references: [id])
+
+  quantidade          Int
+  capacidadeAplicada  Int
+  criadoEm            DateTime @default(now())
+  criadoPorUserId     String
+  criadoPor           User     @relation("ProducaoCriadaPor", fields: [criadoPorUserId], references: [id])
+
+  @@unique([empresaId, rodadaId, catalogoItemId])
+  @@index([rodadaId])
 }
 
 /// Template pré-registrado de evento econômico, disparado pelo professor.

@@ -22,6 +22,7 @@ export async function salvarParametroAction(_p: AdminActionState, formData: Form
     revalidatePath("/professor/parametros");
     revalidatePath("/banco");
     revalidatePath("/financeiro");
+    revalidatePath("/alertas");
     return { status: "success", message: "Parâmetro atualizado.", submittedAt: Date.now() };
   } catch (e) {
     if (e instanceof ParametroError) return { status: "error", message: e.message, submittedAt: Date.now() };

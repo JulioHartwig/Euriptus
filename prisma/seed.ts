@@ -1,4 +1,5 @@
 import {
+  CatalogoItemCategoria,
   EmpresaTipo,
   NoticiaTipo,
   PrismaClient,
@@ -94,6 +95,16 @@ const PARAMETROS_ECONOMICOS = [
     valor: "1518.0000",
     descricao: "Salário mínimo mensal de referência, em reais.",
   },
+  {
+    nome: "DESCONTO_QUITACAO",
+    valor: "0.0500",
+    descricao: "Desconto concedido na quitação antecipada de empréstimos.",
+  },
+  {
+    nome: "TAXA_RESGATE_ANTECIPADO",
+    valor: "0.0500",
+    descricao: "Taxa cobrada no resgate de investimento na mesma rodada da aplicação.",
+  },
 ] as const;
 
 /**
@@ -107,6 +118,9 @@ const CATALOGO: Array<{
   unidade: string;
   preco: string;
   empresaTipo: EmpresaTipo | null;
+  categoria?: CatalogoItemCategoria;
+  aumentoCapacidade?: number;
+  aumentoMarketing?: string;
 }> = [
   {
     nome: "Mudas de café",
@@ -163,6 +177,124 @@ const CATALOGO: Array<{
     unidade: "kit",
     preco: "120.00",
     empresaTipo: EmpresaTipo.VENDA,
+  },
+
+  // Produtos/serviços registrados na produção mensal de cada etapa.
+  {
+    nome: "Café em grãos",
+    descricao: "Produção de café em grãos pronta para a próxima etapa.",
+    unidade: "saca",
+    preco: "400.00",
+    empresaTipo: EmpresaTipo.PRODUTOR,
+    categoria: CatalogoItemCategoria.PRODUTO,
+  },
+  {
+    nome: "Serviço de transporte",
+    descricao: "Viagem de transporte entre as etapas da cadeia.",
+    unidade: "viagem",
+    preco: "500.00",
+    empresaTipo: EmpresaTipo.LOGISTICA,
+    categoria: CatalogoItemCategoria.PRODUTO,
+  },
+  {
+    nome: "Café beneficiado",
+    descricao: "Lote de grãos processado e pronto para distribuição.",
+    unidade: "lote",
+    preco: "700.00",
+    empresaTipo: EmpresaTipo.BENEFICIAMENTO,
+    categoria: CatalogoItemCategoria.PRODUTO,
+  },
+  {
+    nome: "Café pronto para venda",
+    descricao: "Pacote de café embalado para o consumidor final.",
+    unidade: "pacote",
+    preco: "80.00",
+    empresaTipo: EmpresaTipo.VENDA,
+    categoria: CatalogoItemCategoria.PRODUTO,
+  },
+
+  // Melhorias: ampliam a capacidade mensal ou o marketing da empresa de venda.
+  {
+    nome: "Ampliação de área",
+    descricao: "Incorpora nova área de cultivo à produção mensal.",
+    unidade: "implantação",
+    preco: "1500.00",
+    empresaTipo: EmpresaTipo.PRODUTOR,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 30,
+  },
+  {
+    nome: "Tecnologia de irrigação",
+    descricao: "Sistema de irrigação que aumenta a produtividade da lavoura.",
+    unidade: "sistema",
+    preco: "1200.00",
+    empresaTipo: EmpresaTipo.PRODUTOR,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 20,
+  },
+  {
+    nome: "Adubo de alto rendimento",
+    descricao: "Tratamento que eleva o limite de produção do cafezal.",
+    unidade: "aplicação",
+    preco: "900.00",
+    empresaTipo: EmpresaTipo.PRODUTOR,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 25,
+  },
+  {
+    nome: "Aquisição de veículos",
+    descricao: "Amplia a frota disponível para prestações de serviço.",
+    unidade: "veículo",
+    preco: "2000.00",
+    empresaTipo: EmpresaTipo.LOGISTICA,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 25,
+  },
+  {
+    nome: "Roteirização inteligente",
+    descricao: "Otimiza rotas e aumenta viagens possíveis por mês.",
+    unidade: "sistema",
+    preco: "1100.00",
+    empresaTipo: EmpresaTipo.LOGISTICA,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 15,
+  },
+  {
+    nome: "Nova máquina de beneficiamento",
+    descricao: "Equipamento adicional para processar mais lotes por mês.",
+    unidade: "máquina",
+    preco: "2200.00",
+    empresaTipo: EmpresaTipo.BENEFICIAMENTO,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 30,
+  },
+  {
+    nome: "Automação da torra",
+    descricao: "Automação que eleva o limite de beneficiamento mensal.",
+    unidade: "sistema",
+    preco: "1600.00",
+    empresaTipo: EmpresaTipo.BENEFICIAMENTO,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 20,
+  },
+  {
+    nome: "Campanha de marketing",
+    descricao: "Aumenta a capacidade de vendas e a receita das vendas realizadas.",
+    unidade: "campanha",
+    preco: "1300.00",
+    empresaTipo: EmpresaTipo.VENDA,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 10,
+    aumentoMarketing: "0.1000",
+  },
+  {
+    nome: "Ampliação do ponto de venda",
+    descricao: "Aumenta o limite de atendimentos da empresa de venda.",
+    unidade: "obra",
+    preco: "1800.00",
+    empresaTipo: EmpresaTipo.VENDA,
+    categoria: CatalogoItemCategoria.MELHORIA,
+    aumentoCapacidade: 20,
   },
 ];
 
